@@ -1038,6 +1038,7 @@ name = "lucore"
 version = "0.0.0"
 source = { editable = "packages/lucore" }
 dependencies = [
+    { name = "akshare" },
     { name = "apscheduler" },
     { name = "cachetools" },
     { name = "httpx" },
@@ -1069,6 +1070,7 @@ portfolio = [
 
 [package.metadata]
 requires-dist = [
+    { name = "akshare", specifier = ">=1.18" },
     { name = "akshare", marker = "extra == 'cn'", specifier = ">=1.14" },
     { name = "apscheduler", specifier = ">=3.10" },
     { name = "cachetools", specifier = ">=5.3" },

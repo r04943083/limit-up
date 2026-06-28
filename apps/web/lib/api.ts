@@ -478,3 +478,34 @@ export const moveItem = (itemId: number, watchlistId: number) =>
   post<{ ok: boolean }>(`/watchlists/items/${itemId}/move`, { watchlist_id: watchlistId });
 export const updateItem = (itemId: number, patch_: { tags?: string; note?: string }) =>
   patch<WatchlistItem>(`/watchlists/items/${itemId}`, patch_);
+
+// ---- A-share breadth (akshare): limit-up pool / dragon-tiger / HSGT ----
+export type LimitUpStock = {
+  code: string; name: string; pct: number | null; price: number | null;
+  amount: number | null; float_cap: number | null; turnover: number | null;
+  seal_fund: number | null; first_seal: string | null; last_seal: string | null;
+  broken_times: number | null; boards: number | null; streak: string | null; industry: string | null;
+};
+export type LimitUpPool = { date: string; count: number; stocks: LimitUpStock[] };
+export type LimitUpResult = { ok: boolean; error: string | null; pool: LimitUpPool };
+export const getLimitUp = (date?: string) =>
+  get<LimitUpResult>(`/cn/limit-up${date ? `?date=${date}` : ""}`);
+
+export type DragonTigerRow = {
+  code: string; name: string; date: string | null; interpret: string | null;
+  close: number | null; pct: number | null; net_buy: number | null; buy: number | null;
+  sell: number | null; net_pct: number | null; turnover: number | null; reason: string | null;
+};
+export type DragonTiger = { date: string; count: number; rows: DragonTigerRow[] };
+export type DragonTigerResult = { ok: boolean; error: string | null; data: DragonTiger };
+export const getDragonTiger = (date?: string) =>
+  get<DragonTigerResult>(`/cn/dragon-tiger${date ? `?date=${date}` : ""}`);
+
+export type HsgtFlowRow = {
+  date: string | null; market: string | null; direction: string | null;
+  net: number | null; inflow: number | null; up: number | null; flat: number | null;
+  down: number | null; index_name: string | null; index_pct: number | null;
+};
+export type HsgtSummary = { date: string | null; northbound_suspended: boolean; rows: HsgtFlowRow[] };
+export type HsgtResult = { ok: boolean; error: string | null; summary: HsgtSummary };
+export const getHsgtSummary = () => get<HsgtResult>(`/cn/hsgt-summary`);

@@ -16,6 +16,7 @@ from lucore.scheduler.jobs import shutdown_scheduler, start_scheduler
 
 from .routers import (
     briefing,
+    cn,
     markets,
     portfolio,
     recommendations,
@@ -56,6 +57,7 @@ app.include_router(sync.router)
 app.include_router(usage.router)
 app.include_router(briefing.router)
 app.include_router(markets.router)
+app.include_router(cn.router)
 
 
 @app.get("/health")

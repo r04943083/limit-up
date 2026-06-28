@@ -173,6 +173,17 @@ class ProfileCache(Base):
     fetched_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
 
 
+class MarketDataCache(Base):
+    """Generic key→JSON cache for market-wide feeds (A-share limit-up pool, dragon-tiger,
+    HSGT summary). Key encodes feed+date, e.g. 'ztpool:20260628'. TTL is decided by the
+    service (historical days are immutable; today refreshes intra-day)."""
+    __tablename__ = "market_data_cache"
+
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    payload_json: Mapped[str] = mapped_column(Text)
+    fetched_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
+
+
 class Portfolio(Base, TimestampMixin):
     __tablename__ = "portfolios"
 
