@@ -509,3 +509,17 @@ export type HsgtFlowRow = {
 export type HsgtSummary = { date: string | null; northbound_suspended: boolean; rows: HsgtFlowRow[] };
 export type HsgtResult = { ok: boolean; error: string | null; summary: HsgtSummary };
 export const getHsgtSummary = () => get<HsgtResult>(`/cn/hsgt-summary`);
+
+// ---- AI 涨停复盘 (limit-up review, claude -p) ----
+export type ZtReviewResult = {
+  sentiment: string; summary: string; ladder_read: string;
+  leaders: string[]; capital: string; risks: string[];
+};
+export type SavedZtReview = {
+  date: string; provider: string; created_at: string;
+  result: ZtReviewResult; facts: Record<string, unknown>;
+};
+export const getZtReview = (date?: string) =>
+  get<SavedZtReview | null>(`/cn/review${date ? `?date=${date}` : ""}`);
+export const runZtReview = (date?: string) =>
+  post<SavedZtReview>(`/cn/review${date ? `?date=${date}` : ""}`);

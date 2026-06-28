@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Panel from "@/components/Panel";
 import {
-  getLimitUp, getDragonTiger, getHsgtSummary,
-  type LimitUpPool, type DragonTiger, type HsgtSummary,
+  getLimitUp, getDragonTiger, getHsgtSummary, getZtReview, runZtReview,
+  type LimitUpPool, type DragonTiger, type HsgtSummary, type SavedZtReview, type LimitUpStock,
 } from "@/lib/api";
 import { num, signedPct, dirClass } from "@/lib/format";
 
@@ -24,7 +24,9 @@ function toApiDate(d: string): string {
   return d.replaceAll("-", "");
 }
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Local date (not UTC) so it matches the server's dt.date.today().
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 // A-share code → yfinance symbol (6→上证 .SS, else 深证 .SZ; 8/4 北交所 unsupported).
 function toSymbol(code: string): string | null {
@@ -41,10 +43,12 @@ export default function LimitUpPage() {
   const [hsgt, setHsgt] = useState<HsgtSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [review, setReview] = useState<SavedZtReview | null>(null);
+  const [reviewing, setReviewing] = useState(false);
 
   const load = useCallback((iso: string) => {
     const d = toApiDate(iso);
-    setLoading(true); setErr(null); setPool(null); setLhb(null);
+    setLoading(true); setErr(null); setPool(null); setLhb(null); setReview(null);
     Promise.all([getLimitUp(d), getDragonTiger(d)])
       .then(([z, l]) => {
         setPool(z.pool);
@@ -53,10 +57,16 @@ export default function LimitUpPage() {
       })
       .catch((e) => setErr(String(e)))
       .finally(() => setLoading(false));
+    getZtReview(d).then(setReview).catch(() => setReview(null));
   }, []);
 
   useEffect(() => { load(date); }, [date, load]);
   useEffect(() => { getHsgtSummary().then((r) => setHsgt(r.summary)).catch(() => {}); }, []);
+
+  const doReview = () => {
+    setReviewing(true);
+    runZtReview(toApiDate(date)).then(setReview).catch((e) => setErr(String(e))).finally(() => setReviewing(false));
+  };
 
   const open = (code: string) => {
     const sym = toSymbol(code);
@@ -66,7 +76,15 @@ export default function LimitUpPage() {
   // Sort limit-up by 连板 desc then 封板资金 desc — surface the 连板龙头 first.
   const stocks = pool?.stocks.slice().sort((a, b) =>
     (b.boards ?? 0) - (a.boards ?? 0) || (b.seal_fund ?? 0) - (a.seal_fund ?? 0)) ?? [];
-  const maxBoards = stocks.reduce((m, s) => Math.max(m, s.boards ?? 0), 0);
+
+  // 连板天梯: group by board height, highest first (stocks already sorted within tier by seal fund).
+  const tierMap = new Map<number, LimitUpStock[]>();
+  for (const s of stocks) {
+    const b = s.boards && s.boards >= 1 ? s.boards : 1;
+    if (!tierMap.has(b)) tierMap.set(b, []);
+    tierMap.get(b)!.push(s);
+  }
+  const tiers = [...tierMap.entries()].sort((a, b) => b[0] - a[0]);
 
   return (
     <div className="flex-1 overflow-auto p-5 space-y-5">
@@ -83,6 +101,58 @@ export default function LimitUpPage() {
       </div>
 
       {err && <div className="rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
+
+      {/* AI 复盘 */}
+      <Panel title="AI 复盘解读" hint={review ? review.provider : "claude -p"}>
+        <button onClick={doReview} disabled={reviewing || loading || !pool?.count}
+          className="w-full rounded-lg bg-accent/15 text-accent text-sm font-medium py-2 hover:bg-accent/25 disabled:opacity-50">
+          {reviewing ? "复盘中…(约 20–40 秒)" : review ? "重新复盘" : "AI 复盘解读"}
+        </button>
+        {review ? (
+          <div className="space-y-3 mt-3">
+            <div className="text-sm text-accent font-medium leading-relaxed">{review.result.sentiment}</div>
+            <p className="text-sm text-ink-dim leading-relaxed">{review.result.summary}</p>
+            {review.result.ladder_read && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">连板梯队</div>
+                <p className="text-xs text-ink-dim leading-relaxed">{review.result.ladder_read}</p>
+              </div>
+            )}
+            {review.result.leaders.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">主线 / 方向</div>
+                <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">
+                  {review.result.leaders.map((l, i) => <li key={i}>{l}</li>)}
+                </ul>
+              </div>
+            )}
+            {review.result.capital && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">资金面</div>
+                <p className="text-xs text-ink-dim leading-relaxed">{review.result.capital}</p>
+              </div>
+            )}
+            {review.result.risks.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-down mb-1">退潮 / 风险</div>
+                <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">
+                  {review.result.risks.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="text-[11px] text-ink-faint">AI 观点 · 非投资建议 · {review.provider}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-ink-faint mt-2">基于当日涨停梯队、龙虎榜与南向资金,生成中文复盘(情绪 / 梯队 / 主线 / 资金 / 风险)。</p>
+        )}
+      </Panel>
+
+      {/* 连板天梯 */}
+      {!loading && stocks.length > 0 && (
+        <Panel title="连板天梯" hint="高度板在左 · 点标的看研究">
+          <Ladder tiers={tiers} onOpen={open} />
+        </Panel>
+      )}
 
       {/* HSGT summary */}
       {hsgt && hsgt.rows.length > 0 && (
@@ -194,6 +264,41 @@ export default function LimitUpPage() {
       </Panel>
 
       <p className="text-[11px] text-ink-faint">数据来源:akshare(东方财富)· 仅供研究参考,非投资建议。</p>
+    </div>
+  );
+}
+
+// 连板天梯: one column per board height (高度板在左), stocks sorted by 封板资金 within a tier.
+function Ladder({ tiers, onOpen }: { tiers: [number, LimitUpStock[]][]; onOpen: (code: string) => void }) {
+  return (
+    <div className="flex gap-3 overflow-x-auto pb-1">
+      {tiers.map(([boards, list]) => {
+        const hi = boards >= 2;
+        return (
+          <div key={boards} className="shrink-0 w-40">
+            <div className="flex items-center justify-between mb-2 sticky top-0">
+              <span className={`text-xs font-semibold ${hi ? "text-up" : "text-ink-dim"}`}>
+                {hi ? `${boards}连板` : "首板"}
+              </span>
+              <span className="text-[11px] text-ink-faint tnum">{list.length}</span>
+            </div>
+            <div className="space-y-1 max-h-[22rem] overflow-y-auto no-scrollbar pr-0.5">
+              {list.map((s) => (
+                <button key={s.code} onClick={() => onOpen(s.code)}
+                  className={`w-full text-left rounded-md border px-2 py-1 transition-colors ${
+                    hi ? "border-up/30 bg-up/5 hover:bg-up/10" : "border-line bg-panel hover:bg-panel-2/60"
+                  }`}>
+                  <div className="text-[12px] text-ink truncate">{s.name}</div>
+                  <div className="text-[10px] text-ink-faint flex items-center justify-between gap-1">
+                    <span className="tnum">{s.code}</span>
+                    <span className="truncate">{s.industry ?? ""}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
