@@ -34,6 +34,9 @@ r() { printf '\033[31m%s\033[0m\n' "$*"; }
 d() { printf '\033[2m%s\033[0m\n' "$*"; }
 
 port_pid() { ss -ltnp 2>/dev/null | awk -v p=":$1" '$4 ~ p"$"' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2; }
+lan_ip()  { hostname -I 2>/dev/null | tr ' ' '\n' | grep -vE '^(172\.1[6-9]|172\.2[0-9]|172\.3[0-1]|127\.|169\.254\.)' | grep -E '^[0-9]+\.' | head -1; }
+# does the port listen on all interfaces (*: / 0.0.0.0 / ::) rather than only loopback?
+port_public() { ss -ltn 2>/dev/null | awk -v p=":$1" '$4 ~ p"$"{print $4}' | grep -qE '^(\*|0\.0\.0\.0|\[::\]|::):' && echo 1 || echo 0; }
 
 # ── Internal crash-restart supervisor (re-exec of this script) ──
 if [ "${1:-}" = "__supervise" ]; then
@@ -88,10 +91,23 @@ for _ in $(seq 1 40); do
   if curl -fs -o /dev/null "http://localhost:$API_PORT/health" 2>/dev/null \
      && curl -fs -o /dev/null "http://localhost:$WEB_PORT/watchlist" 2>/dev/null; then ok=1; break; fi
 done
+LANIP="$(lan_ip)"
 echo
-echo "API  :$API_PORT  $( [ -n "$(port_pid "$API_PORT")" ] && g 'UP' || r 'DOWN' )"
+echo "──────────────── 端口 / 可访问地址 ────────────────"
+echo "API  :$API_PORT  $( [ -n "$(port_pid "$API_PORT")" ] && g 'UP' || r 'DOWN' )  (仅本机 127.0.0.1,供 web 内部转发)"
 echo "WEB  :$WEB_PORT  $( [ -n "$(port_pid "$WEB_PORT")" ] && g 'UP' || r 'DOWN' )"
-if [ "$ok" -eq 1 ]; then g "LU is up → http://localhost:$WEB_PORT  (硬刷新 Ctrl/Cmd+Shift+R)"
+echo
+echo "  本机          → http://localhost:$WEB_PORT"
+if [ -n "$LANIP" ]; then
+  if [ "$(port_public "$WEB_PORT")" = "1" ]; then
+    echo "  局域网/同网段  → http://$LANIP:$WEB_PORT   $(d '(需防火墙放行该端口)')"
+  else
+    r   "  局域网         → 未监听对外网卡(仅 localhost),外部无法访问"
+  fi
+fi
+echo "  公网          → 加 --tunnel 启动,会在下方打印 trycloudflare 网址"
+echo "───────────────────────────────────────────────────"
+if [ "$ok" -eq 1 ]; then g "LU is up  (页面没更新就硬刷新 Ctrl/Cmd+Shift+R)"
 else r "services slow to respond — check .api.log / .web.log"; fi
 
 # ── Optional public tunnel ──
