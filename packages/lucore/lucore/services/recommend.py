@@ -155,16 +155,27 @@ def generate(category: str, universe: list[str] | None = None, top_n: int = 5, *
 
 
 def list_recommendations(category: str | None = None, limit: int = 50) -> list[RecommendationOut]:
+    # Recommendations are re-generated per day (idempotency_key = generation date), so older
+    # batches accumulate in the table. Return ONLY the latest batch per category (rows whose
+    # idempotency_key == that category's most recent one) so the page never shows symbols /
+    # text from a stale prior generation.
     with session_scope() as s:
-        q = select(Recommendation).order_by(Recommendation.ai_score.desc().nullslast())
+        q = select(Recommendation)
         if category:
             q = q.where(Recommendation.category == category)
-        rows = s.execute(q.limit(limit)).scalars().all()
+        rows = list(s.execute(q).scalars())
+        latest: dict[str, str] = {}
+        for r in rows:
+            key = r.idempotency_key or ""
+            if key > latest.get(r.category, ""):
+                latest[r.category] = key
+        rows = [r for r in rows if (r.idempotency_key or "") == latest.get(r.category, "")]
+        rows.sort(key=lambda r: (r.ai_score is not None, r.ai_score or 0), reverse=True)
         return [
             RecommendationOut(
                 symbol=r.symbol, category=r.category, ai_score=r.ai_score, conviction=r.conviction,
                 thesis=r.thesis, risks=json.loads(r.risks_json or "[]"), catalysts=json.loads(r.catalysts_json or "[]"),
                 target_price=r.target_price, time_horizon=r.time_horizon, provider=r.provider,
             )
-            for r in rows
+            for r in rows[:limit]
         ]

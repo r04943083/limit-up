@@ -43,3 +43,8 @@ npm-debug.log*
 
 # TS incremental build cache
 *.tsbuildinfo
+
+# Playwright E2E artifacts
+apps/web/playwright-report/
+apps/web/test-results/
+apps/web/blob-report/

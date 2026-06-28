@@ -40,7 +40,13 @@ def get_indices(force: bool = False) -> list[IndexQuote]:
     now = time.time()
     if not force and _cache and now - _cache[0] < _TTL:
         return _cache[1]
-    router = get_router()
+    try:
+        router = get_router()
+    except Exception:  # noqa: BLE001 - cold-init hiccup must not 500 the site-wide status bar
+        # Serve the last good cache if any, else placeholder rows (prices fill on next poll).
+        return _cache[1] if _cache else [
+            IndexQuote(symbol=s, name=n, market=m) for s, n, m in INDICES
+        ]
     out: list[IndexQuote] = []
     for sym, name, market in INDICES:
         row = IndexQuote(symbol=sym, name=name, market=market)
