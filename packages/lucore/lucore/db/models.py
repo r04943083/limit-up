@@ -86,6 +86,26 @@ class Analysis(Base, TimestampMixin):
     idempotency_key: Mapped[str] = mapped_column(String(64), default="")  # e.g. source hash or date
 
 
+class Recommendation(Base, TimestampMixin):
+    __tablename__ = "recommendations"
+    __table_args__ = (
+        UniqueConstraint("symbol", "category", "idempotency_key", name="uq_reco"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    category: Mapped[str] = mapped_column(String(32), index=True)  # growth/value/momentum/ai/dividend/...
+    ai_score: Mapped[float | None] = mapped_column(Float)
+    conviction: Mapped[str | None] = mapped_column(String(16))  # low/medium/high
+    thesis: Mapped[str | None] = mapped_column(Text)
+    risks_json: Mapped[str | None] = mapped_column(Text)
+    catalysts_json: Mapped[str | None] = mapped_column(Text)
+    target_price: Mapped[float | None] = mapped_column(Float)
+    time_horizon: Mapped[str | None] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(32), default="claude_code")
+    idempotency_key: Mapped[str] = mapped_column(String(64), default="")  # generation date
+
+
 class Portfolio(Base, TimestampMixin):
     __tablename__ = "portfolios"
 

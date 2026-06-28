@@ -6,7 +6,7 @@ import datetime as dt
 import io
 import json
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from ..compute.portfolio import (
@@ -22,7 +22,7 @@ from ..data.router import get_router
 from ..db import session_scope
 from ..db.models import Analysis, Holding, Portfolio, Stock
 from ..llm.base import LLMProvider, get_provider
-from ..markets import MARKET_CURRENCY, Market, infer_market
+from ..markets import MARKET_CURRENCY, infer_market
 
 # CSV header aliases (covers Futu / IBKR / generic exports).
 _SYM = {"symbol", "ticker", "code", "代码", "证券代码", "stock"}

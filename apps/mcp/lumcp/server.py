@@ -79,6 +79,16 @@ def save_analysis(
 
 
 @mcp.tool()
+def screen_stock(category: str) -> dict:
+    """Run LU's deterministic screen for a category (growth/value/momentum/dividend/ai/quality/swing).
+    Returns the candidates that passed with the metrics that matched — score them yourself if you wish."""
+    from lucore.services.recommend import screen_category
+
+    cands = screen_category(category)
+    return {"category": category, "candidates": [c.model_dump() for c in cands]}
+
+
+@mcp.tool()
 def portfolio_analysis(portfolio_id: int = 0) -> dict:
     """Deterministic portfolio analytics (value, P&L, allocation, concentration, correlation).
     portfolio_id=0 -> the default portfolio. Reason over these facts, then optionally save a review."""

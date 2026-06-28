@@ -205,6 +205,26 @@ export const getAnalytics = (pid: number) => get<PortfolioAnalytics>(`/portfolio
 export const getReview = (pid: number) => get<PortfolioReview | null>(`/portfolio/${pid}/review`);
 export const runReview = (pid: number) => post<PortfolioReview>(`/portfolio/${pid}/review`);
 
+// ---- Recommendations ----
+export type Recommendation = {
+  symbol: string;
+  category: string;
+  name: string | null;
+  ai_score: number | null;
+  conviction: string | null;
+  thesis: string | null;
+  risks: string[];
+  catalysts: string[];
+  target_price: number | null;
+  time_horizon: string | null;
+  provider: string;
+};
+export const getRecCategories = () => get<string[]>("/recommendations/categories");
+export const getRecommendations = (category?: string) =>
+  get<Recommendation[]>(`/recommendations${category ? `?category=${category}` : ""}`);
+export const generateRecommendations = (category: string) =>
+  post<Recommendation[]>(`/recommendations/generate?category=${category}`);
+
 export const getDefaultWatchlist = () => get<Watchlist>("/watchlists/default");
 export const addItem = (wid: number, symbol: string, tags?: string) =>
   post<WatchlistItem>(`/watchlists/${wid}/items`, { symbol, tags });

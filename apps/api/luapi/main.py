@@ -13,7 +13,7 @@ from lucore import __version__
 from lucore.config import get_settings
 from lucore.db import init_db
 
-from .routers import portfolio, stocks, watchlists
+from .routers import portfolio, recommendations, stocks, watchlists
 
 
 @asynccontextmanager
@@ -37,6 +37,7 @@ app.add_middleware(
 app.include_router(stocks.router)
 app.include_router(watchlists.router)
 app.include_router(portfolio.router)
+app.include_router(recommendations.router)
 
 
 @app.get("/health")
