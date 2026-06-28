@@ -8,7 +8,9 @@ import Chart from "@/components/Chart";
 import { Stat, RecBadge, ScoreMeter, Chip } from "@/components/ui";
 import {
   getResearch, getTechnical, getOhlcv, getAnalysis, runAnalyze, syncSymbol,
+  getNewsAnalysis, runNewsAnalysis,
   type ResearchBundle, type Technical, type OhlcvBar, type SavedAnalysis,
+  type SavedNewsAnalysis,
 } from "@/lib/api";
 import { num, compact, pct, signedPct, recTone, sinceLabel } from "@/lib/format";
 
@@ -23,6 +25,8 @@ export default function ResearchPage() {
   const [err, setErr] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [newsAna, setNewsAna] = useState<SavedNewsAnalysis | null>(null);
+  const [analyzingNews, setAnalyzingNews] = useState(false);
 
   const loadAll = useCallback(() => {
     setErr(null);
@@ -39,7 +43,17 @@ export default function ResearchPage() {
   useEffect(() => {
     loadAll();
     getAnalysis(sym).then(setAnalysis).catch(() => {});
+    setNewsAna(null);
+    getNewsAnalysis(sym).then(setNewsAna).catch(() => {});
   }, [sym, loadAll]);
+
+  const analyzeNews = useCallback(() => {
+    setAnalyzingNews(true);
+    runNewsAnalysis(sym)
+      .then(setNewsAna)
+      .catch((e) => setErr(String(e)))
+      .finally(() => setAnalyzingNews(false));
+  }, [sym]);
 
   const sync = useCallback(() => {
     setSyncing(true);
@@ -122,7 +136,61 @@ export default function ResearchPage() {
             )}
           </Panel>
 
-          <Panel title="Recent News" hint={rb ? `${rb.news.length}` : ""}>
+          <Panel title="新闻舆情 · News" hint={rb ? `${rb.news.length}` : ""}>
+            <div className="mb-3 rounded-lg border border-line bg-base/40 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {newsAna ? (
+                    <>
+                      <RecBadge
+                        rec={
+                          newsAna.result.overall === "bullish" ? "偏多 Bullish"
+                            : newsAna.result.overall === "bearish" ? "偏空 Bearish" : "中性 Neutral"
+                        }
+                        tone={
+                          newsAna.result.overall === "bullish" ? "up"
+                            : newsAna.result.overall === "bearish" ? "down" : "amber"
+                        }
+                      />
+                      <span className="text-[11px] text-ink-faint">影响 {newsAna.result.impact}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-ink-faint">AI 尚未分析新闻舆情</span>
+                  )}
+                </div>
+                <button
+                  onClick={analyzeNews}
+                  disabled={analyzingNews}
+                  className="rounded-md bg-accent/15 text-accent text-xs font-medium px-3 py-1.5 hover:bg-accent/25 disabled:opacity-50 transition-colors"
+                >
+                  {analyzingNews ? "分析中… (~20–40s)" : newsAna ? "重新分析" : "AI 分析舆情"}
+                </button>
+              </div>
+              {newsAna && (
+                <div className="space-y-2">
+                  <p className="text-sm text-ink-dim leading-relaxed">{newsAna.result.summary}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {newsAna.result.bull_points.length > 0 && (
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-up mb-1">利好 Bull</div>
+                        <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">
+                          {newsAna.result.bull_points.map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {newsAna.result.bear_points.length > 0 && (
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wide text-down mb-1">利空 Bear</div>
+                        <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">
+                          {newsAna.result.bear_points.map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-ink-faint">AI 观点 · 非投资建议</p>
+                </div>
+              )}
+            </div>
             <ul className="space-y-2">
               {rb?.news.map((n, i) => (
                 <li key={i} className="text-sm">

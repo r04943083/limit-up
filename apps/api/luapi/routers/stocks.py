@@ -7,6 +7,7 @@ from lucore.compute.indicators import TechnicalAnalysis
 from lucore.data.base import Bar, Quote
 from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
+from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
 from lucore.services.sync import SyncResult, sync_symbols
 
@@ -61,3 +62,17 @@ def analyze(symbol: str) -> SavedAnalysis:
 @router.get("/{symbol}/analysis", response_model=SavedAnalysis | None)
 def get_analysis(symbol: str) -> SavedAnalysis | None:
     return latest_analysis(symbol.upper())
+
+
+@router.post("/{symbol}/news-analysis", response_model=SavedNewsAnalysis)
+def run_news_analysis(symbol: str) -> SavedNewsAnalysis:
+    """AI sentiment over recent headlines (claude -p). Synchronous — may take ~20-40s."""
+    try:
+        return analyze_news(symbol.upper())
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"news analysis failed: {e}") from e
+
+
+@router.get("/{symbol}/news-analysis", response_model=SavedNewsAnalysis | None)
+def get_news_analysis(symbol: str) -> SavedNewsAnalysis | None:
+    return latest_news_analysis(symbol.upper())

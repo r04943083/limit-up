@@ -147,6 +147,27 @@ export type SavedAnalysis = {
 export const getAnalysis = (s: string) => get<SavedAnalysis | null>(`/stocks/${s}/analysis`);
 export const runAnalyze = (s: string) => post<SavedAnalysis>(`/stocks/${s}/analyze`);
 
+// ---- News sentiment ----
+export type NewsSentiment = {
+  overall: string;
+  impact: string;
+  summary: string;
+  bull_points: string[];
+  bear_points: string[];
+  headlines_assessed: number;
+};
+export type SavedNewsAnalysis = {
+  symbol: string;
+  provider: string;
+  created_at: string;
+  headlines: NewsItem[];
+  result: NewsSentiment;
+};
+export const getNewsAnalysis = (s: string) =>
+  get<SavedNewsAnalysis | null>(`/stocks/${s}/news-analysis`);
+export const runNewsAnalysis = (s: string) =>
+  post<SavedNewsAnalysis>(`/stocks/${s}/news-analysis`);
+
 export type WatchlistItem = {
   id: number;
   symbol: string;
