@@ -161,11 +161,13 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
       <div className="w-[340px] shrink-0 border-l border-line flex flex-col overflow-hidden">
         {/* Futu-style quote header */}
         <div className="px-4 pt-3 pb-2 border-b border-line">
-          <div className="flex items-baseline gap-2">
-            <span className="text-base font-semibold truncate">{f?.name ?? q?.name ?? sym}</span>
-            <span className="text-xs text-ink-faint">{sym}</span>
+          <div className="text-base font-semibold text-ink truncate" title={f?.name ?? q?.name ?? sym}>
+            {f?.name ?? q?.name ?? sym}
           </div>
-          <div className="flex items-baseline gap-2 mt-1">
+          <div className="text-xs text-ink-faint mt-0.5">
+            {sym}{rb?.market ? ` · ${rb.market}` : ""}
+          </div>
+          <div className="flex items-baseline gap-2 mt-1.5">
             <span className={`text-2xl font-semibold tnum ${dirClass(q?.change_pct)}`}>{q?.price != null ? num(q.price) : "—"}</span>
             <span className={`text-sm tnum ${dirClass(q?.change_pct)}`}>
               {q?.change != null ? (q.change >= 0 ? "+" : "") + num(q.change) : ""} {signedPct(q?.change_pct)}

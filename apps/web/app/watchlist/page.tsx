@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import WatchlistPane from "@/components/WatchlistPane";
-import Terminal from "@/components/Terminal";
+import StockPage from "@/components/StockPage";
 import { getWatchlists, getWatchlistQuotes } from "@/lib/api";
 
 // 自选 = the Futu-style terminal. The left pane is the watchlist; clicking a row
@@ -29,7 +29,7 @@ export default function WatchlistPage() {
   return (
     <>
       <WatchlistPane activeSymbol={sel ?? undefined} onSelect={setSel} />
-      <Terminal symbol={sel} />
+      <StockPage symbol={sel} />
     </>
   );
 }

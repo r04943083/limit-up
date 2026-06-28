@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sparkline from "./Sparkline";
 import ManageWatchlistModal from "./ManageWatchlistModal";
@@ -38,11 +38,40 @@ export default function WatchlistPane({
   const [manageOpen, setManageOpen] = useState(false);
   const [localRefresh, setLocalRefresh] = useState(0);
   const [health, setHealth] = useState<Record<string, { score: number; label: string }>>({});
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Futu-style draggable tab strip: click-drag to scroll, no visible scrollbar.
+  const stripRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({ down: false, startX: 0, startLeft: 0, moved: false });
 
   const gid = groupId !== undefined ? groupId : innerGid;
   const setGid = (id: number) => {
     setInnerGid(id);
     onGroupChange?.(id);
+    // Bring the chosen tab into view in the strip.
+    requestAnimationFrame(() => {
+      stripRef.current?.querySelector<HTMLElement>(`[data-gid="${id}"]`)
+        ?.scrollIntoView({ inline: "center", block: "nearest" });
+    });
+  };
+
+  const onStripDown = (e: React.PointerEvent) => {
+    const el = stripRef.current;
+    if (!el) return;
+    drag.current = { down: true, startX: e.clientX, startLeft: el.scrollLeft, moved: false };
+  };
+  const onStripMove = (e: React.PointerEvent) => {
+    const el = stripRef.current;
+    if (!el || !drag.current.down) return;
+    const dx = e.clientX - drag.current.startX;
+    if (Math.abs(dx) > 4) drag.current.moved = true;
+    el.scrollLeft = drag.current.startLeft - dx;
+  };
+  const endStripDrag = () => { drag.current.down = false; };
+  // Suppress the tab's click if the gesture was a drag (so dragging never re-selects).
+  const tabClick = (id: number) => {
+    if (drag.current.moved) { drag.current.moved = false; return; }
+    setGid(id);
   };
 
   useEffect(() => {
@@ -82,13 +111,21 @@ export default function WatchlistPane({
 
   return (
     <aside className="w-[300px] shrink-0 border-r border-line flex flex-col bg-base">
-      {/* Group tabs + manage */}
-      <div className="flex items-center gap-1 px-2 h-9 border-b border-line">
-        <div className="flex items-center gap-1 overflow-x-auto flex-1 no-scrollbar">
+      {/* Group tabs (drag to scroll) + dropdown-all + manage */}
+      <div className="relative flex items-center gap-1 px-2 h-9 border-b border-line">
+        <div
+          ref={stripRef}
+          onPointerDown={onStripDown}
+          onPointerMove={onStripMove}
+          onPointerUp={endStripDrag}
+          onPointerLeave={endStripDrag}
+          className="flex items-center gap-1 overflow-x-auto flex-1 no-scrollbar cursor-grab active:cursor-grabbing select-none"
+        >
           {groups.map((g) => (
             <button
               key={g.id}
-              onClick={() => setGid(g.id)}
+              data-gid={g.id}
+              onClick={() => tabClick(g.id)}
               className={`px-2 py-1 rounded text-xs whitespace-nowrap transition-colors ${
                 g.id === gid ? "text-accent bg-panel-2" : "text-ink-dim hover:text-ink"
               }`}
@@ -98,6 +135,17 @@ export default function WatchlistPane({
             </button>
           ))}
         </div>
+        {groups.length > 0 && (
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className={`shrink-0 text-xs px-1 py-1 rounded hover:bg-panel-2 ${menuOpen ? "text-accent" : "text-ink-faint hover:text-ink"}`}
+            title="展开全部分组"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${menuOpen ? "rotate-180" : ""}`}>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={() => setManageOpen(true)}
           className="shrink-0 text-ink-faint hover:text-accent text-xs px-1.5 py-1 rounded hover:bg-panel-2"
@@ -105,6 +153,26 @@ export default function WatchlistPane({
         >
           管理
         </button>
+
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-2 top-9 z-40 w-44 max-h-72 overflow-y-auto rounded-lg border border-line bg-panel shadow-2xl py-1">
+              {groups.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => { setGid(g.id); setMenuOpen(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-panel-2 ${
+                    g.id === gid ? "text-accent" : "text-ink-dim"
+                  }`}
+                >
+                  <span className="truncate">{g.name}</span>
+                  {g.id === gid && <span className="text-accent">✓</span>}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Column header */}

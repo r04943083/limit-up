@@ -16,7 +16,7 @@ type Tab = (typeof TABS)[number];
  * 行情 reuses the Terminal (chart + quote/AI/news panel); 财报 reuses DeepResearch
  * (statements + DCF); 分红/股东/概况 render the cached CompanyProfile.
  */
-export default function StockPage({ symbol }: { symbol: string }) {
+export default function StockPage({ symbol }: { symbol: string | null }) {
   const [tab, setTab] = useState<Tab>("行情");
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profLoading, setProfLoading] = useState(false);
@@ -28,10 +28,18 @@ export default function StockPage({ symbol }: { symbol: string }) {
   }, [symbol]);
 
   useEffect(() => {
-    if (!needsProfile || profile) return;
+    if (!symbol || !needsProfile || profile) return;
     setProfLoading(true);
     getProfile(symbol).then(setProfile).catch(() => setProfile(null)).finally(() => setProfLoading(false));
   }, [symbol, needsProfile, profile]);
+
+  if (!symbol) {
+    return (
+      <div className="flex-1 grid place-items-center text-ink-faint text-sm">
+        从左侧选择一个自选标的查看行情与分析。
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
