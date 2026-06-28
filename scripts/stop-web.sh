@@ -12,7 +12,7 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 API_PORT="${LU_API_PORT:-8000}"
 WEB_PORT="${LU_WEB_PORT:-3000}"
-API_PID="$ROOT/.api.pid"; WEB_PID="$ROOT/.web.pid"
+API_PID="$ROOT/.api.pid"; WEB_PID="$ROOT/.web.pid"; CF_PID="$ROOT/.cf.pid"
 
 port_pid() { ss -ltnp 2>/dev/null | awk -v p=":$1" '$4 ~ p"$"' | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2; }
 
@@ -32,5 +32,20 @@ stop_one() {  # name pidfile port
   printf '\033[2m  %s stopped\033[0m\n' "$name"
 }
 
+stop_tunnel() {  # cloudflared has no local port; stop by pidfile + pattern
+  local sp
+  if [ -f "$CF_PID" ]; then
+    sp="$(cat "$CF_PID" 2>/dev/null)"
+    if [ -n "$sp" ] && kill -0 "$sp" 2>/dev/null; then
+      kill -TERM "$sp" 2>/dev/null
+      kill -TERM "-$sp" 2>/dev/null || true
+    fi
+    rm -f "$CF_PID"
+  fi
+  pkill -x cloudflared 2>/dev/null || true   # -x: exact exe name, never matches a shell
+  printf '\033[2m  TUNNEL stopped\033[0m\n'
+}
+
 stop_one API "$API_PID" "$API_PORT"
 stop_one WEB "$WEB_PID" "$WEB_PORT"
+stop_tunnel

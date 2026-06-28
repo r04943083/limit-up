@@ -6,10 +6,16 @@
 # Usage:
 #   scripts/start-web.sh            # PROD: build the web app, then serve (changes take effect)
 #   scripts/start-web.sh --dev      # DEV: hot-reload (uvicorn --reload + next dev), no build
-#   scripts/start-web.sh --force    # kill whatever holds :8000/:3000 first (default: also done)
+#   scripts/start-web.sh --tunnel   # also open a public cloudflared tunnel to :3000, print its URL
+#   (flags combine, e.g. `--dev --tunnel`)
 #
 # Open http://localhost:3000 afterwards. If the page looks stale, hard-refresh
 # (Ctrl/Cmd+Shift+R) — production serves a build snapshot and the browser caches.
+#
+# --tunnel needs cloudflared on PATH (~/.local/bin). It uses Cloudflare's free
+# "quick tunnel": a RANDOM https://<words>.trycloudflare.com URL, no account, no
+# DNS setup — but the URL changes every start and the page has NO auth (anyone with
+# the link can use it + burn your AI quota). stop-web.sh tears the tunnel down too.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -18,8 +24,8 @@ WEB_DIR="$ROOT/apps/web"
 
 API_PORT="${LU_API_PORT:-8000}"
 WEB_PORT="${LU_WEB_PORT:-3000}"
-API_PID="$ROOT/.api.pid"; WEB_PID="$ROOT/.web.pid"
-API_LOG="$ROOT/.api.log"; WEB_LOG="$ROOT/.web.log"
+API_PID="$ROOT/.api.pid"; WEB_PID="$ROOT/.web.pid"; CF_PID="$ROOT/.cf.pid"
+API_LOG="$ROOT/.api.log"; WEB_LOG="$ROOT/.web.log"; CF_LOG="$ROOT/.cf.log"
 
 export PATH="$HOME/.local/bin:$PATH"   # uv lives here, not on default PATH
 
@@ -46,8 +52,11 @@ if [ "${1:-}" = "__supervise" ]; then
   exit 0
 fi
 
-DEV=0
-for a in "$@"; do [ "$a" = "--dev" ] && DEV=1; done  # --force is implied; we always free our own ports
+DEV=0; TUNNEL=0
+for a in "$@"; do
+  [ "$a" = "--dev" ] && DEV=1
+  [ "$a" = "--tunnel" ] && TUNNEL=1
+done  # we always free our own ports first (implicit --force)
 
 # Free our ports (stop anything already listening — almost always our own stale run).
 "$SCRIPT_DIR/stop-web.sh" >/dev/null 2>&1 || true
@@ -84,3 +93,23 @@ echo "API  :$API_PORT  $( [ -n "$(port_pid "$API_PORT")" ] && g 'UP' || r 'DOWN'
 echo "WEB  :$WEB_PORT  $( [ -n "$(port_pid "$WEB_PORT")" ] && g 'UP' || r 'DOWN' )"
 if [ "$ok" -eq 1 ]; then g "LU is up → http://localhost:$WEB_PORT  (硬刷新 Ctrl/Cmd+Shift+R)"
 else r "services slow to respond — check .api.log / .web.log"; fi
+
+# ── Optional public tunnel ──
+if [ "$TUNNEL" -eq 1 ]; then
+  if command -v cloudflared >/dev/null 2>&1; then
+    : > "$CF_LOG"   # truncate so we grep THIS run's URL
+    start_one TUNNEL "$CF_PID" "$CF_LOG" -- cloudflared tunnel --url "http://localhost:$WEB_PORT" --no-autoupdate
+    d "waiting for tunnel URL…"
+    URL=""
+    for _ in $(seq 1 20); do
+      sleep 2
+      URL="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_LOG" | tail -1)"
+      [ -n "$URL" ] && break
+    done
+    if [ -n "$URL" ]; then g "TUNNEL (公网) → $URL"; d "  ⚠ 无鉴权,谁有链接谁能用;停止见 stop-web.sh"
+    else r "tunnel URL not ready — check $CF_LOG"; fi
+  else
+    r "cloudflared 未安装,跳过 --tunnel。安装:"
+    d "  curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o ~/.local/bin/cloudflared && chmod +x ~/.local/bin/cloudflared"
+  fi
+fi
