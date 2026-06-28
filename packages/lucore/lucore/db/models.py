@@ -162,6 +162,17 @@ class FinancialsCache(Base):
     fetched_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
 
 
+class ProfileCache(Base):
+    """Cached company profile + dividends + ownership (serialized CompanyProfile JSON).
+
+    Like financials, this changes slowly, so it's refreshed lazily (≥7 days stale)."""
+    __tablename__ = "profile_cache"
+
+    symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
+    payload_json: Mapped[str] = mapped_column(Text)  # serialized data.base.CompanyProfile
+    fetched_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
+
+
 class Portfolio(Base, TimestampMixin):
     __tablename__ = "portfolios"
 

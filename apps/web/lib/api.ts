@@ -184,6 +184,23 @@ export const getDcf = (s: string, p: DcfParams = {}) => {
   return get<DcfView>(`/stocks/${s}/dcf${qs ? `?${qs}` : ""}`);
 };
 
+// ---- Company profile: overview + dividends + ownership ----
+export type Dividend = { ex_date: string; amount: number };
+export type HolderRow = {
+  name: string; pct: number | null; shares: number | null;
+  value: number | null; date_reported: string | null;
+};
+export type CompanyProfile = {
+  symbol: string; market: string;
+  name: string | null; sector: string | null; industry: string | null;
+  country: string | null; website: string | null; employees: number | null;
+  summary: string | null; currency: string | null;
+  dividends: Dividend[]; dividend_yield: number | null; payout_ratio: number | null;
+  insiders_pct: number | null; institutions_pct: number | null;
+  top_institutions: HolderRow[];
+};
+export const getProfile = (s: string) => get<CompanyProfile>(`/stocks/${s}/profile`);
+
 export type AnalysisResult = {
   summary: string;
   recommendation: string;

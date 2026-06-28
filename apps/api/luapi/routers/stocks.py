@@ -4,10 +4,11 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from lucore.compute.indicators import TechnicalAnalysis
-from lucore.data.base import Bar, Financials, Quote
+from lucore.data.base import Bar, CompanyProfile, Financials, Quote
 from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
 from lucore.services.financials import DcfView, compute_dcf, get_financials_cached
+from lucore.services.profile import get_profile_cached
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
 from lucore.services.sync import SyncResult, sync_symbol
@@ -61,6 +62,12 @@ def technical(symbol: str, period: str = "1y", interval: str = "1d") -> Technica
 def financials(symbol: str) -> Financials:
     """Curated financial statements (annual + quarterly), cache-first (~weekly refresh)."""
     return get_financials_cached(symbol.upper())
+
+
+@router.get("/{symbol}/profile", response_model=CompanyProfile)
+def profile(symbol: str) -> CompanyProfile:
+    """Company overview + dividend history + ownership, cache-first (~weekly refresh)."""
+    return get_profile_cached(symbol.upper())
 
 
 @router.get("/{symbol}/dcf", response_model=DcfView)
