@@ -13,6 +13,8 @@ from lucore import __version__
 from lucore.config import get_settings
 from lucore.db import init_db
 
+from .routers import stocks, watchlists
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -30,6 +32,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(stocks.router)
+app.include_router(watchlists.router)
 
 
 @app.get("/health")
