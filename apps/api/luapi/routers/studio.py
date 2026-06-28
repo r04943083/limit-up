@@ -1,0 +1,85 @@
+"""AI Studio routes: personas (#13), debate (#19), multi-agent (#14), coach (#12), DNA (#16)."""
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+
+from lucore.services import coach as coach_svc
+from lucore.services import debate as debate_svc
+from lucore.services import dna as dna_svc
+from lucore.services import multi_agent as ma_svc
+from lucore.services import personas as personas_svc
+from lucore.services.analyze import SavedAnalysis
+
+router = APIRouter(prefix="/studio", tags=["studio"])
+
+
+# ---- Personas (#13) ----
+@router.get("/personas", response_model=list[personas_svc.Persona])
+def list_personas() -> list[personas_svc.Persona]:
+    return personas_svc.list_personas()
+
+
+@router.post("/personas/{key}/analyze/{symbol}", response_model=SavedAnalysis)
+def analyze_as(key: str, symbol: str) -> SavedAnalysis:
+    try:
+        return personas_svc.analyze_as(symbol, key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"analyze failed: {e}") from e
+
+
+# ---- Debate (#19) ----
+@router.get("/debate/{symbol}", response_model=debate_svc.SavedDebate | None)
+def get_debate(symbol: str) -> debate_svc.SavedDebate | None:
+    return debate_svc.latest_debate(symbol)
+
+
+@router.post("/debate/{symbol}", response_model=debate_svc.SavedDebate)
+def run_debate(symbol: str) -> debate_svc.SavedDebate:
+    try:
+        return debate_svc.run_debate(symbol)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"debate failed: {e}") from e
+
+
+# ---- Multi-agent (#14) ----
+@router.get("/panel/{symbol}", response_model=ma_svc.SavedMultiAgent | None)
+def get_panel(symbol: str) -> ma_svc.SavedMultiAgent | None:
+    return ma_svc.latest_panel(symbol)
+
+
+@router.post("/panel/{symbol}", response_model=ma_svc.SavedMultiAgent)
+def run_panel(symbol: str) -> ma_svc.SavedMultiAgent:
+    try:
+        return ma_svc.run_panel(symbol)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"panel failed: {e}") from e
+
+
+# ---- Coach (#12) ----
+@router.get("/coach", response_model=coach_svc.SavedCoach | None)
+def get_coach() -> coach_svc.SavedCoach | None:
+    return coach_svc.latest_coach()
+
+
+@router.post("/coach", response_model=coach_svc.SavedCoach)
+def run_coach() -> coach_svc.SavedCoach:
+    try:
+        return coach_svc.coach()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"coach failed: {e}") from e
+
+
+# ---- Investor DNA (#16) ----
+@router.get("/dna", response_model=dna_svc.SavedDna | None)
+def get_dna() -> dna_svc.SavedDna | None:
+    return dna_svc.latest_dna()
+
+
+@router.post("/dna", response_model=dna_svc.SavedDna)
+def run_dna() -> dna_svc.SavedDna:
+    try:
+        return dna_svc.compute_dna()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"dna failed: {e}") from e

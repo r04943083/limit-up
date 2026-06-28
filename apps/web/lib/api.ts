@@ -523,3 +523,128 @@ export const getZtReview = (date?: string) =>
   get<SavedZtReview | null>(`/cn/review${date ? `?date=${date}` : ""}`);
 export const runZtReview = (date?: string) =>
   post<SavedZtReview>(`/cn/review${date ? `?date=${date}` : ""}`);
+
+// ---- #11 投资日志 Journal ----
+export type JournalReview = {
+  score: number;
+  verdict: string;
+  strengths: string[];
+  blind_spots: string[];
+  biases: string[];
+};
+export type JournalEntry = {
+  id: number;
+  symbol: string | null;
+  action: string;
+  title: string;
+  body: string | null;
+  conviction: string | null;
+  ai_score: number | null;
+  ai_review: JournalReview | null;
+  created_at: string;
+};
+export const getJournal = (symbol?: string) =>
+  get<JournalEntry[]>(`/journal${symbol ? `?symbol=${symbol}` : ""}`);
+export const addJournal = (body: {
+  title: string; body?: string; symbol?: string; action?: string; conviction?: string;
+}) => post<JournalEntry>("/journal", body);
+export const deleteJournal = (id: number) => del<{ removed: boolean }>(`/journal/${id}`);
+export const reviewJournal = (id: number) => post<JournalEntry>(`/journal/${id}/review`);
+
+// ---- #8 模拟交易 Paper trading ----
+export type PaperPosition = {
+  symbol: string; quantity: number; avg_cost: number; price: number | null;
+  market_value: number; cost_basis: number; pnl: number; pnl_pct: number | null; weight: number;
+};
+export type PaperTrade = {
+  id: number; symbol: string; side: string; quantity: number; price: number;
+  note: string | null; created_at: string;
+};
+export type PaperAccount = {
+  id: number; name: string; cash: number; starting_cash: number; base_currency: string;
+  positions: PaperPosition[]; invested: number; equity: number;
+  total_pnl: number; total_return_pct: number | null; trades: PaperTrade[];
+};
+export const getPaper = () => get<PaperAccount>("/paper/account");
+export const paperTrade = (symbol: string, side: "buy" | "sell", quantity: number, note?: string) =>
+  post<PaperAccount>("/paper/trade", { symbol, side, quantity, note });
+export const resetPaper = () => post<PaperAccount>("/paper/reset");
+
+// ---- #9 策略构建器 Strategy backtest ----
+export type StrategySpec = {
+  kind: string;
+  rsi_period?: number; rsi_buy?: number; rsi_sell?: number;
+  fast?: number; slow?: number;
+  lookback?: number; exit_lookback?: number;
+  starting_cash?: number;
+};
+export type BacktestPoint = { date: string; equity: number; buy_hold: number };
+export type BacktestTrade = {
+  entry_date: string; exit_date: string | null; entry_price: number;
+  exit_price: number | null; return_pct: number | null; bars_held: number;
+};
+export type BacktestStats = {
+  total_return_pct: number; buy_hold_return_pct: number; cagr_pct: number | null;
+  max_drawdown_pct: number; win_rate: number | null; trades: number;
+  sharpe: number | null; exposure_pct: number;
+};
+export type BacktestResult = {
+  symbol: string; kind: string; bars: number; spec: StrategySpec;
+  stats: BacktestStats; curve: BacktestPoint[]; trade_log: BacktestTrade[];
+};
+export const getStrategyKinds = () => get<string[]>("/strategy/kinds");
+export const runBacktest = (symbol: string, spec: StrategySpec, period = "3y") =>
+  post<BacktestResult>(`/strategy/backtest?symbol=${symbol}&period=${period}`, spec);
+export type StrategyRead = { summary: string; verdict: string; observations: string[]; cautions: string[] };
+export const explainBacktest = (symbol: string, spec: StrategySpec, period = "3y") =>
+  post<StrategyRead>(`/strategy/explain?symbol=${symbol}&period=${period}`, spec);
+
+// ---- #1 AI 对话 Chat ----
+export type ChatTurn = { id: number; role: string; content: string; created_at: string };
+export type ChatReply = { reply: string; provider: string; symbols_used: string[] };
+export const getChatHistory = (session = "default") =>
+  get<ChatTurn[]>(`/chat/history?session_id=${session}`);
+export const sendChat = (message: string, session = "default") =>
+  post<ChatReply>("/chat/send", { message, session_id: session });
+export const clearChat = (session = "default") =>
+  del<{ cleared: number }>(`/chat/history?session_id=${session}`);
+
+// ---- AI Studio: personas (#13) / debate (#19) / panel (#14) / coach (#12) / DNA (#16) ----
+export type Persona = { key: string; name: string; tagline: string; style: string; system: string };
+export const getPersonas = () => get<Persona[]>("/studio/personas");
+export const analyzeAsPersona = (key: string, symbol: string) =>
+  post<SavedAnalysis>(`/studio/personas/${key}/analyze/${symbol}`);
+
+export type DebateResult = {
+  bull_case: string; bear_case: string; bull_rebuttal: string; bear_rebuttal: string;
+  winner: string; confidence: number; verdict: string; key_question: string;
+};
+export type SavedDebate = { symbol: string; provider: string; created_at: string; result: DebateResult };
+export const getDebate = (s: string) => get<SavedDebate | null>(`/studio/debate/${s}`);
+export const runDebate = (s: string) => post<SavedDebate>(`/studio/debate/${s}`);
+
+export type AgentView = { agent: string; stance: string; score: number; rationale: string };
+export type MultiAgentResult = {
+  agents: AgentView[]; consensus_score: number; recommendation: string;
+  synthesis: string; disagreement: string;
+};
+export type SavedMultiAgent = { symbol: string; provider: string; created_at: string; result: MultiAgentResult };
+export const getPanel = (s: string) => get<SavedMultiAgent | null>(`/studio/panel/${s}`);
+export const runPanel = (s: string) => post<SavedMultiAgent>(`/studio/panel/${s}`);
+
+export type CoachResult = {
+  grade: string; discipline_score: number; headline: string;
+  good_habits: string[]; biases: string[]; drills: string[]; action_items: string[];
+};
+export type SavedCoach = { provider: string; created_at: string; result: CoachResult };
+export const getCoach = () => get<SavedCoach | null>("/studio/coach");
+export const runCoach = () => post<SavedCoach>("/studio/coach");
+
+export type DnaResult = {
+  archetype: string; risk_tolerance: string; time_horizon: string; sector_tilt: string[];
+  strengths: string[]; watchouts: string[]; summary: string;
+  growth_vs_value: number; conviction: number;
+};
+export type SavedDna = { provider: string; created_at: string; facts: Record<string, unknown>; result: DnaResult };
+export const getDna = () => get<SavedDna | null>("/studio/dna");
+export const runDna = () => post<SavedDna>("/studio/dna");

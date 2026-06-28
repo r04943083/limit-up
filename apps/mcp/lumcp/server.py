@@ -96,6 +96,40 @@ def portfolio_analysis(portfolio_id: int = 0) -> dict:
     return pf.get_analytics(pid).model_dump(mode="json")
 
 
+@mcp.tool()
+def backtest_strategy(
+    symbol: str,
+    kind: str = "ma_cross",
+    fast: int = 20,
+    slow: int = 50,
+    rsi_buy: float = 30.0,
+    rsi_sell: float = 70.0,
+    lookback: int = 20,
+    period: str = "3y",
+) -> dict:
+    """Deterministic backtest of a rule strategy (kind ∈ rsi|ma_cross|breakout) over cached OHLCV.
+    Returns stats (return vs buy&hold, drawdown, win rate, Sharpe) and the trade log — reason over these."""
+    from lucore.compute.backtest import StrategySpec
+    from lucore.services.strategy import run_backtest
+
+    spec = StrategySpec(
+        kind=kind, fast=fast, slow=slow, rsi_buy=rsi_buy, rsi_sell=rsi_sell, lookback=lookback,
+    )
+    r = run_backtest(symbol.strip().upper(), spec, period=period)
+    return {"symbol": r.symbol, "kind": r.kind, "bars": r.bars,
+            "stats": r.stats.model_dump(), "trades": [t.model_dump() for t in r.trade_log]}
+
+
+@mcp.tool()
+def paper_trade(symbol: str, side: str, quantity: float) -> dict:
+    """Execute a paper (simulated) trade at the cache-quote price. side ∈ buy|sell.
+    Returns the updated account: cash, equity, P&L and positions."""
+    from lucore.services import paper
+
+    acct = paper.trade(symbol.strip().upper(), side, quantity)
+    return acct.model_dump(mode="json")
+
+
 def main() -> None:
     init_db()
     mcp.run()  # stdio transport

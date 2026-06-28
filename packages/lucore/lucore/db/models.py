@@ -221,3 +221,54 @@ class PortfolioSnapshot(Base):
     total_cost: Mapped[float] = mapped_column(Float, default=0.0)
     return_pct: Mapped[float | None] = mapped_column(Float)
     metrics_json: Mapped[str | None] = mapped_column(Text)
+
+
+class JournalEntry(Base, TimestampMixin):
+    """An investment-journal entry: a decision or observation the user logs, optionally
+    about a symbol. LU can later AI-grade the rationale (write-back into ai_* columns)."""
+    __tablename__ = "journal_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str | None] = mapped_column(String(32), index=True)
+    action: Mapped[str] = mapped_column(String(16), default="note")  # buy/sell/add/trim/watch/note
+    title: Mapped[str] = mapped_column(String(256))
+    body: Mapped[str | None] = mapped_column(Text)  # the rationale / thesis
+    conviction: Mapped[str | None] = mapped_column(String(16))  # low/medium/high
+    ai_score: Mapped[float | None] = mapped_column(Float)  # 0-10, AI grade of the reasoning
+    ai_review_json: Mapped[str | None] = mapped_column(Text)  # validated JournalReview blob
+    provider: Mapped[str | None] = mapped_column(String(32))
+
+
+class PaperAccount(Base, TimestampMixin):
+    """A virtual cash account for paper trading. Positions are derived from PaperTrade rows."""
+    __tablename__ = "paper_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    cash: Mapped[float] = mapped_column(Float, default=100000.0)
+    starting_cash: Mapped[float] = mapped_column(Float, default=100000.0)
+    base_currency: Mapped[str] = mapped_column(String(8), default="USD")
+
+
+class PaperTrade(Base, TimestampMixin):
+    """A single simulated fill at the cache-quote price when executed."""
+    __tablename__ = "paper_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("paper_accounts.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(4))  # buy/sell
+    quantity: Mapped[float] = mapped_column(Float)
+    price: Mapped[float] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(String(256))
+
+
+class ChatMessage(Base, TimestampMixin):
+    """One turn in an AI-chat conversation. session_id groups a conversation (default 'default')."""
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), default="default", index=True)
+    role: Mapped[str] = mapped_column(String(16))  # user/assistant
+    content: Mapped[str] = mapped_column(Text)
+    provider: Mapped[str | None] = mapped_column(String(32))
