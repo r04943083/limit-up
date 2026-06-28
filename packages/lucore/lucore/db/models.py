@@ -106,6 +106,36 @@ class Recommendation(Base, TimestampMixin):
     idempotency_key: Mapped[str] = mapped_column(String(64), default="")  # generation date
 
 
+class LlmCall(Base, TimestampMixin):
+    """Usage ledger: one row per LLM call, so the user can watch token/cost burn
+    and avoid blowing through their Max-plan quota."""
+    __tablename__ = "llm_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    model: Mapped[str | None] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(32), index=True)  # research/portfolio/recommendation/news/briefing
+    symbol: Mapped[str | None] = mapped_column(String(32), index=True)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cache_creation_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    num_turns: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Snapshot(Base, TimestampMixin):
+    """Cached research bundle (quote + fundamentals + technical + news) per symbol.
+    The `synced_at` lets the UI show freshness; reads prefer this over slow live fetches."""
+    __tablename__ = "snapshots"
+
+    symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
+    bundle_json: Mapped[str] = mapped_column(Text)  # serialized ResearchBundle
+    synced_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
+
+
 class Portfolio(Base, TimestampMixin):
     __tablename__ = "portfolios"
 

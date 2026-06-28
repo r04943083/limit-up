@@ -89,7 +89,21 @@ export type ResearchBundle = {
   news: NewsItem[];
   generated_at: string;
 };
-export const getResearch = (s: string) => get<ResearchBundle>(`/stocks/${s}/research`);
+// Cached-first by default (loads the stored snapshot → instant). Pass cached=false to force live.
+export const getResearch = (s: string, cached = true) =>
+  get<ResearchBundle>(`/stocks/${s}/research?cached=${cached}`);
+
+// ---- Data sync (pull live → DB so pages load fast) ----
+export type SyncResult = {
+  requested: number;
+  synced: number;
+  failed: string[];
+  synced_at: string;
+};
+export const syncSymbol = (s: string) => post<SyncResult>(`/stocks/${s}/sync`);
+export const syncAll = () => post<SyncResult>(`/sync/all`);
+export type FreshnessRow = { symbol: string; synced_at: string | null };
+export const getFreshness = () => get<FreshnessRow[]>(`/sync/freshness`);
 
 export type Technical = {
   dates: string[];
@@ -224,6 +238,34 @@ export const getRecommendations = (category?: string) =>
   get<Recommendation[]>(`/recommendations${category ? `?category=${category}` : ""}`);
 export const generateRecommendations = (category: string) =>
   post<Recommendation[]>(`/recommendations/generate?category=${category}`);
+
+// ---- LLM usage ----
+export type UsageCall = {
+  id: number;
+  provider: string;
+  model: string | null;
+  kind: string;
+  symbol: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  duration_ms: number;
+  created_at: string;
+};
+export type UsageDay = { date: string; calls: number; total_tokens: number; cost_usd: number };
+export type UsageSummary = {
+  today_calls: number;
+  today_tokens: number;
+  today_cost_usd: number;
+  total_calls: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  by_kind: Record<string, number>;
+  by_day: UsageDay[];
+  recent: UsageCall[];
+};
+export const getUsageSummary = () => get<UsageSummary>("/usage/summary");
 
 export const getDefaultWatchlist = () => get<Watchlist>("/watchlists/default");
 export const addItem = (wid: number, symbol: string, tags?: string) =>

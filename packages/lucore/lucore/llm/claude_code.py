@@ -51,4 +51,29 @@ class ClaudeCodeProvider(LLMProvider):
         result = envelope.get("result")
         if not isinstance(result, str):
             raise LLMError(f"unexpected claude -p result type: {type(result)}")
+        self.last_meta = _usage_from_envelope(envelope, s.claude_model)
         return result
+
+
+def _usage_from_envelope(envelope: dict, model: str | None) -> dict:
+    """Extract token/cost metadata from the `claude -p --output-format json` envelope."""
+    usage = envelope.get("usage") or {}
+    inp = int(usage.get("input_tokens") or 0)
+    out = int(usage.get("output_tokens") or 0)
+    cache_read = int(usage.get("cache_read_input_tokens") or 0)
+    cache_create = int(usage.get("cache_creation_input_tokens") or 0)
+    # Prefer the model the run actually used (modelUsage keys) over the configured one.
+    model_usage = envelope.get("modelUsage") or {}
+    used_model = next(iter(model_usage), None) or model
+    return {
+        "provider": "claude_code",
+        "model": used_model,
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cache_read_tokens": cache_read,
+        "cache_creation_tokens": cache_create,
+        "total_tokens": inp + out + cache_read + cache_create,
+        "cost_usd": float(envelope.get("total_cost_usd") or 0.0),
+        "duration_ms": int(envelope.get("duration_ms") or 0),
+        "num_turns": int(envelope.get("num_turns") or 0),
+    }

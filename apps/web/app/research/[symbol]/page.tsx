@@ -7,10 +7,10 @@ import Panel from "@/components/Panel";
 import Chart from "@/components/Chart";
 import { Stat, RecBadge, ScoreMeter, Chip } from "@/components/ui";
 import {
-  getResearch, getTechnical, getOhlcv, getAnalysis, runAnalyze,
+  getResearch, getTechnical, getOhlcv, getAnalysis, runAnalyze, syncSymbol,
   type ResearchBundle, type Technical, type OhlcvBar, type SavedAnalysis,
 } from "@/lib/api";
-import { num, compact, pct, signedPct, recTone } from "@/lib/format";
+import { num, compact, pct, signedPct, recTone, sinceLabel } from "@/lib/format";
 
 export default function ResearchPage() {
   const params = useParams<{ symbol: string }>();
@@ -22,8 +22,9 @@ export default function ResearchPage() {
   const [analysis, setAnalysis] = useState<SavedAnalysis | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
+  const loadAll = useCallback(() => {
     setErr(null);
     setRb(null);
     Promise.all([getResearch(sym), getTechnical(sym), getOhlcv(sym)])
@@ -33,8 +34,20 @@ export default function ResearchPage() {
         setOhlcv(o);
       })
       .catch((e) => setErr(String(e)));
-    getAnalysis(sym).then(setAnalysis).catch(() => {});
   }, [sym]);
+
+  useEffect(() => {
+    loadAll();
+    getAnalysis(sym).then(setAnalysis).catch(() => {});
+  }, [sym, loadAll]);
+
+  const sync = useCallback(() => {
+    setSyncing(true);
+    syncSymbol(sym)
+      .then(() => loadAll())
+      .catch((e) => setErr(String(e)))
+      .finally(() => setSyncing(false));
+  }, [sym, loadAll]);
 
   const analyze = useCallback(() => {
     setAnalyzing(true);
@@ -60,13 +73,27 @@ export default function ResearchPage() {
           <span className="text-sm text-ink-dim">{f?.name ?? rb?.quote.name ?? ""}</span>
           {rb && <Chip>{rb.market}</Chip>}
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-semibold tnum">
-            {q?.price != null ? num(q.price) : "—"}{" "}
-            <span className="text-sm text-ink-dim">{q?.currency}</span>
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-2xl font-semibold tnum">
+              {q?.price != null ? num(q.price) : "—"}{" "}
+              <span className="text-sm text-ink-dim">{q?.currency}</span>
+            </div>
+            <div className={`text-sm tnum ${(q?.change_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>
+              {signedPct(q?.change_pct)}
+            </div>
           </div>
-          <div className={`text-sm tnum ${(q?.change_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>
-            {signedPct(q?.change_pct)}
+          <div className="text-right">
+            <button
+              onClick={sync}
+              disabled={syncing}
+              className="rounded-lg border border-line text-sm px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50 transition-colors"
+            >
+              {syncing ? "更新中…" : "↻ 更新数据"}
+            </button>
+            <div className="text-[11px] text-ink-faint mt-1">
+              {rb ? `数据更新于 ${sinceLabel(rb.generated_at)}` : ""}
+            </div>
           </div>
         </div>
       </div>

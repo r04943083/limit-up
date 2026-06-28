@@ -9,6 +9,7 @@ const NAV: { label: string; href: string; soon?: boolean }[] = [
   { label: "Research", href: "/research/NVDA" },
   { label: "Recommendations", href: "/recommendations" },
   { label: "Portfolio", href: "/portfolio" },
+  { label: "AI 用量", href: "/usage" },
   { label: "Paper Trading", href: "/paper", soon: true },
   { label: "Journal", href: "/journal", soon: true },
   { label: "AI Coach", href: "/coach", soon: true },

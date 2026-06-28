@@ -13,7 +13,8 @@ from sqlalchemy import select
 
 from ..db import session_scope
 from ..db.models import Analysis
-from ..llm.base import LLMProvider, get_provider
+from ..llm.base import LLMProvider, get_provider, with_chinese
+from . import usage
 from .research import ResearchBundle, build_research_bundle
 
 SYSTEM_PROMPT = (
@@ -118,9 +119,10 @@ def analyze_stock(
 ) -> SavedAnalysis:
     bundle = build_research_bundle(symbol)
     provider = provider or get_provider()
-    system = persona_system or SYSTEM_PROMPT
+    system = with_chinese(persona_system or SYSTEM_PROMPT)
 
     raw = provider.generate_json(build_prompt(bundle), system=system)
+    usage.record(provider, "research", symbol)
     result = AnalysisResult.model_validate(raw)
     return persist_analysis(symbol, result, provider=provider.name)
 

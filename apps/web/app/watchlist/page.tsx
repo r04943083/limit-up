@@ -5,7 +5,7 @@ import Link from "next/link";
 import Panel from "@/components/Panel";
 import { Chip } from "@/components/ui";
 import {
-  getDefaultWatchlist, addItem, removeItem, importCsv,
+  getDefaultWatchlist, addItem, removeItem, importCsv, syncAll,
   type Watchlist,
 } from "@/lib/api";
 
@@ -56,11 +56,34 @@ export default function WatchlistPage() {
     reload();
   };
 
+  const updateAll = async () => {
+    setBusy(true);
+    setMsg("正在更新所有标的数据到本地数据库…");
+    try {
+      const r = await syncAll();
+      setMsg(`已更新 ${r.synced}/${r.requested} 个标的${r.failed.length ? `,失败:${r.failed.join(", ")}` : ""}。之后页面将从数据库快速加载。`);
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-5 max-w-4xl">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold tracking-tight">{wl?.name ?? "Watchlist"}</h1>
-        <span className="text-xs text-ink-faint tnum">{wl?.items.length ?? 0} symbols</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-ink-faint tnum">{wl?.items.length ?? 0} symbols</span>
+          <button
+            onClick={updateAll}
+            disabled={busy}
+            className="rounded-lg border border-line text-sm px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50 transition-colors"
+            title="拉取最新行情/基本面/新闻并存入本地数据库,之后加载更快"
+          >
+            {busy ? "更新中…" : "↻ 全部更新"}
+          </button>
+        </div>
       </div>
 
       <Panel title="Add symbols" hint="US · HK · A-share">

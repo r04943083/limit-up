@@ -25,6 +25,20 @@ export function signedPct(v: number | null | undefined, digits = 2): string {
   return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
 }
 
+// Relative "x 分钟前 / x 小时前" label for a sync/generated timestamp.
+export function sinceLabel(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "—";
+  const mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1) return "刚刚";
+  if (mins < 60) return `${mins} 分钟前`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} 小时前`;
+  const days = Math.floor(hrs / 24);
+  return `${days} 天前`;
+}
+
 export function recTone(rec: string | null | undefined): "up" | "down" | "amber" {
   const r = (rec || "").toLowerCase().replace(/[\s_]/g, "");
   if (r.includes("strongsell") || r === "sell" || r.includes("underperform")) return "down";

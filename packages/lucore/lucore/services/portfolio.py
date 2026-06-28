@@ -21,8 +21,9 @@ from ..data.fx import fx_map
 from ..data.router import get_router
 from ..db import session_scope
 from ..db.models import Analysis, Holding, Portfolio, Stock
-from ..llm.base import LLMProvider, get_provider
+from ..llm.base import LLMProvider, get_provider, with_chinese
 from ..markets import MARKET_CURRENCY, infer_market
+from . import usage
 
 # CSV header aliases (covers Futu / IBKR / generic exports).
 _SYM = {"symbol", "ticker", "code", "代码", "证券代码", "stock"}
@@ -197,11 +198,12 @@ def review_portfolio(portfolio_id: int, *, provider: LLMProvider | None = None) 
         f"{json.dumps(_review_facts(analytics), indent=2)}\n\n"
         f"Return ONLY JSON with keys:\n{json.dumps(spec, indent=2)}"
     )
-    system = (
+    system = with_chinese(
         "You are LU's portfolio risk reviewer. Reason over the provided facts only; never invent "
         "numbers. Focus on concentration, sector/market tilts, correlation and risk. JSON only."
     )
     review = PortfolioReview.model_validate(provider.generate_json(prompt, system=system))
+    usage.record(provider, "portfolio", f"@PORTFOLIO:{portfolio_id}")
 
     idem = dt.date.today().isoformat()
     with session_scope() as s:

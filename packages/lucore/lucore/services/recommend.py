@@ -13,7 +13,8 @@ from ..compute.screener import Candidate, ScreenInput, screen
 from ..data.router import get_router
 from ..db import session_scope
 from ..db.models import Recommendation
-from ..llm.base import LLMProvider, get_provider
+from ..llm.base import LLMProvider, get_provider, with_chinese
+from ..services import usage
 from ..services.research import get_technical
 
 # Modest curated universe (US + a few HK). Extend / move to DB later.
@@ -113,11 +114,12 @@ def generate(category: str, universe: list[str] | None = None, top_n: int = 5, *
         f"screen. FACTS (ground truth):\n{json.dumps(facts, indent=2, default=str)}\n\n"
         f"Score and justify each. Return ONLY JSON of this shape:\n{json.dumps(spec, indent=2)}"
     )
-    system = (
+    system = with_chinese(
         "You are LU's recommendation analyst. Only reason over the provided facts; never invent numbers. "
         "Return a recommendation for EACH candidate. JSON only."
     )
     batch = RecoBatch.model_validate(provider.generate_json(prompt, system=system))
+    usage.record(provider, "recommendation", category)
 
     by_symbol = {c.symbol: c for c in candidates}
     idem = dt.date.today().isoformat()

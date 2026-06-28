@@ -7,7 +7,8 @@ from lucore.compute.indicators import TechnicalAnalysis
 from lucore.data.base import Bar, Quote
 from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
-from lucore.services.research import ResearchBundle, build_research_bundle, get_technical
+from lucore.services.research import ResearchBundle, get_research, get_technical
+from lucore.services.sync import SyncResult, sync_symbols
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -18,11 +19,18 @@ def quote(symbol: str) -> Quote:
 
 
 @router.get("/{symbol}/research", response_model=ResearchBundle)
-def research(symbol: str) -> ResearchBundle:
+def research(symbol: str, cached: bool = True) -> ResearchBundle:
+    """Cached-first by default (loads the stored snapshot, fast). cached=false forces a live refresh."""
     try:
-        return build_research_bundle(symbol.upper())
+        return get_research(symbol.upper(), cached=cached)
     except Exception as e:  # noqa: BLE001 - surface data errors to the UI
         raise HTTPException(status_code=502, detail=f"data error: {e}") from e
+
+
+@router.post("/{symbol}/sync", response_model=SyncResult)
+def sync_one(symbol: str) -> SyncResult:
+    """Pull latest live data for one symbol into the DB (snapshot + OHLCV)."""
+    return sync_symbols([symbol.upper()])
 
 
 @router.get("/{symbol}/ohlcv", response_model=list[Bar])
