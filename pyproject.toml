@@ -1,0 +1,19 @@
+# Virtual workspace root for limit-up (LU).
+# All Python logic lives in packages/lucore; apps/api and apps/mcp are thin adapters.
+[tool.uv.workspace]
+members = ["packages/lucore", "apps/api", "apps/mcp"]
+
+[tool.uv.sources]
+lucore = { workspace = true }
+luapi = { workspace = true }
+lumcp = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.11"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/lucore/tests"]

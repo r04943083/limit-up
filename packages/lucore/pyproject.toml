@@ -1,0 +1,30 @@
+[project]
+name = "lucore"
+version = "0.0.0"
+description = "limit-up (LU) core: deterministic compute engine, data adapters, LLM providers, agents, persistence."
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0",
+    "httpx>=0.27",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "yfinance>=0.2.50",
+    "cachetools>=5.3",
+]
+
+[project.optional-dependencies]
+# Heavy / system-dependent extras, installed on demand per phase.
+indicators = ["pandas-ta-classic>=0.6"]       # pure-python indicators (TA-Lib added later, needs C lib)
+fundamentals = ["edgartools>=3.0"]            # SEC EDGAR (US fundamentals)
+cn = ["akshare>=1.14"]                         # HK / A-share data
+futu = ["futu-api>=7.0"]                       # Futu OpenD import
+portfolio = ["quantstats>=0.0.64", "PyPortfolioOpt>=1.5"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["lucore"]
