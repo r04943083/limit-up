@@ -14,13 +14,15 @@ apps/web/out/
 npm-debug.log*
 
 # Local data (never commit the user's portfolio / DB)
-data/
+# NOTE: leading slash anchors this to the repo root only — an un-anchored "data/"
+# also matches the source package packages/lucore/lucore/data/ and silently drops it.
+/data/
 *.db
 *.sqlite
 *.parquet
 
 # Personal reference material (Futu screenshots + exported watchlists = holdings)
-reference/
+/reference/
 
 # Service supervisor PID files + logs (scripts/start-web.sh)
 *.pid
