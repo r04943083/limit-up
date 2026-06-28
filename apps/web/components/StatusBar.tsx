@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getIndices, type IndexQuote } from "@/lib/api";
 import { num, signedPct, dirClass } from "@/lib/format";
+import ApiStatus from "./ApiStatus";
 
 export default function StatusBar() {
   const [idx, setIdx] = useState<IndexQuote[]>([]);
@@ -23,7 +24,10 @@ export default function StatusBar() {
           <span className={`tnum ${dirClass(q.change_pct)}`}>{signedPct(q.change_pct)}</span>
         </span>
       ))}
-      <span className="ml-auto text-ink-faint whitespace-nowrap">AI 观点 · 非投资建议</span>
+      <div className="ml-auto flex items-center gap-4 shrink-0">
+        <ApiStatus />
+        <span className="text-ink-faint whitespace-nowrap">AI 观点 · 非投资建议</span>
+      </div>
     </footer>
   );
 }

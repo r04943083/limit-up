@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import Logo from "./Logo";
 
 type Item = { label: string; href: string; match: string; icon: ReactNode };
 
@@ -27,11 +28,20 @@ export default function IconRail() {
   const path = usePathname();
   return (
     <aside className="w-16 shrink-0 border-r border-line bg-panel/40 flex flex-col items-center">
-      <Link href="/" className="h-14 grid place-items-center w-full border-b border-line">
-        <span className="grid place-items-center w-8 h-8 rounded-lg bg-accent/15 text-accent font-bold text-sm">
-          LU
-        </span>
+      <Link href="/" title="limit-up (LU)" className="h-14 grid place-items-center w-full border-b border-line">
+        <Logo size={32} className="rounded-lg" />
       </Link>
+      <button
+        onClick={() => window.dispatchEvent(new Event("lu:search-open"))}
+        title="搜索代码  ·  ⌘K / /"
+        className="w-14 mt-2 py-2 rounded-lg flex flex-col items-center gap-1 text-ink-dim hover:bg-panel-2/60 hover:text-ink transition-colors"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <span className="text-[10px] leading-none">搜索</span>
+      </button>
       <nav className="flex-1 w-full py-2 flex flex-col items-center gap-1">
         {NAV.map((n) => {
           const active = n.match === "__home__" ? path === "/" : path.startsWith(n.match);

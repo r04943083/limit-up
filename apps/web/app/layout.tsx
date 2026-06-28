@@ -4,7 +4,7 @@ import IconRail from "@/components/IconRail";
 import RightColumn from "@/components/RightColumn";
 
 export const metadata: Metadata = {
-  title: "limit-up (LU)",
+  title: "LU · 涨停 limit-up",
   description: "AI 原生个人投资平台",
 };
 
