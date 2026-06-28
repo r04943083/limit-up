@@ -147,6 +147,43 @@ export type OhlcvBar = { date: string; open: number; high: number; low: number; 
 export const getOhlcv = (s: string, period = "1y", interval = "1d") =>
   get<OhlcvBar[]>(`/stocks/${s}/ohlcv?period=${period}&interval=${interval}`);
 
+// ---- Deep research: financial statements + DCF ----
+export type StatementRow = { label: string; values: (number | null)[] };
+export type Statement = { periods: string[]; rows: StatementRow[] };
+export type Financials = {
+  symbol: string;
+  market: string;
+  currency: string | null;
+  income: Statement; balance: Statement; cashflow: Statement;
+  income_q: Statement; balance_q: Statement; cashflow_q: Statement;
+  fcf_periods: string[]; fcf: (number | null)[];
+  shares: number | null; cash: number | null; total_debt: number | null; net_debt: number | null;
+};
+export const getFinancials = (s: string) => get<Financials>(`/stocks/${s}/financials`);
+
+export type DcfYear = { year: number; fcf: number; pv: number };
+export type DcfResult = {
+  fcf_base: number; growth: number; discount: number; terminal_growth: number; years: number;
+  shares: number | null; net_debt: number;
+  pv_explicit: number; terminal_value: number; pv_terminal: number;
+  enterprise_value: number; equity_value: number; intrinsic_per_share: number | null;
+  table: DcfYear[];
+};
+export type DcfView = {
+  symbol: string; currency: string | null; price: number | null; upside_pct: number | null;
+  has_fcf: boolean; result: DcfResult | null;
+};
+export type DcfParams = { growth?: number; discount?: number; terminal?: number; years?: number };
+export const getDcf = (s: string, p: DcfParams = {}) => {
+  const q = new URLSearchParams();
+  for (const k of ["growth", "discount", "terminal", "years"] as const) {
+    const v = p[k];
+    if (v != null && !Number.isNaN(v)) q.set(k, String(v));
+  }
+  const qs = q.toString();
+  return get<DcfView>(`/stocks/${s}/dcf${qs ? `?${qs}` : ""}`);
+};
+
 export type AnalysisResult = {
   summary: string;
   recommendation: string;
@@ -394,13 +431,22 @@ export const importEbk = (files: { name: string; content: string }[]) =>
 export type EbkExport = { filename: string; content: string; count: number };
 export const exportEbk = (wid: number) => get<EbkExport>(`/watchlists/${wid}/export-ebk`);
 
+// ---- JSON backup (whole-library export / import) ----
+export type JsonImportGroupResult = { group: string; added: number; skipped: number };
+export type JsonImportResult = {
+  mode: string;
+  groups: JsonImportGroupResult[];
+  total_added: number;
+};
+export const exportAllJson = () => get<Record<string, unknown>>("/watchlists/export-json");
+export const importJson = (mode: "merge" | "replace", data: unknown) =>
+  post<JsonImportResult>("/watchlists/import-json", { mode, data });
+
 export const getDefaultWatchlist = () => get<Watchlist>("/watchlists/default");
 export const addItem = (wid: number, symbol: string, tags?: string) =>
   post<WatchlistItem>(`/watchlists/${wid}/items`, { symbol, tags });
 export const removeItem = (itemId: number) =>
   del<{ removed: boolean }>(`/watchlists/items/${itemId}`);
-export const importCsv = (wid: number, csv: string) =>
-  post<{ added: number }>(`/watchlists/${wid}/import-csv`, csv, true);
 
 // ---- Watchlist management: groups + items reorder / rename / delete / move / tags ----
 export const renameWatchlist = (wid: number, name: string, description?: string) =>

@@ -55,10 +55,45 @@ if [ "${1:-}" = "__supervise" ]; then
   exit 0
 fi
 
+usage() {
+  cat <<EOF
+LU 启动脚本 — 拉起后端(FastAPI :$API_PORT)与前端(Next.js :$WEB_PORT),崩溃自动重启。
+
+用法:
+  scripts/start-web.sh [选项]
+
+选项:
+  (无)          生产模式:先 build 前端再启动(代码改动需重跑本脚本生效)
+  --dev         开发模式:热重载(uvicorn --reload + next dev),不 build
+  --tunnel      额外开 cloudflared 公网隧道到 :$WEB_PORT,并打印随机 trycloudflare 网址
+                ⚠ 公网无鉴权,谁有链接谁能用、会消耗你的 AI 额度
+  -h, --help    显示本帮助并退出
+
+可组合,例如:  scripts/start-web.sh --dev --tunnel
+
+端口 / 访问:
+  API  :$API_PORT  仅本机(127.0.0.1),供 web 内部转发
+  WEB  :$WEB_PORT  本机 http://localhost:$WEB_PORT;局域网 http://<本机IP>:$WEB_PORT(需放行防火墙)
+  公网         需 --tunnel(见上)
+
+关闭:
+  scripts/stop-web.sh        停掉前后端(及隧道)
+
+说明:
+  - 启动会先释放自身端口(内部调用 stop-web.sh)。
+  - 生产模式服务的是 build 快照 + 浏览器缓存较强 → 页面没更新就硬刷新(Ctrl/Cmd+Shift+R)。
+  - cloudflared 需在 PATH(~/.local/bin);隧道网址每次启动都会变。
+EOF
+}
+
 DEV=0; TUNNEL=0
 for a in "$@"; do
-  [ "$a" = "--dev" ] && DEV=1
-  [ "$a" = "--tunnel" ] && TUNNEL=1
+  case "$a" in
+    -h|--help) usage; exit 0 ;;
+    --dev) DEV=1 ;;
+    --tunnel) TUNNEL=1 ;;
+    *) r "未知选项:$a"; echo; usage; exit 2 ;;
+  esac
 done  # we always free our own ports first (implicit --force)
 
 # Free our ports (stop anything already listening — almost always our own stale run).

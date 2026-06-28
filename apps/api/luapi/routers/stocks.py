@@ -4,9 +4,10 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from lucore.compute.indicators import TechnicalAnalysis
-from lucore.data.base import Bar, Quote
+from lucore.data.base import Bar, Financials, Quote
 from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
+from lucore.services.financials import DcfView, compute_dcf, get_financials_cached
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
 from lucore.services.sync import SyncResult, sync_symbol
@@ -54,6 +55,25 @@ def technical(symbol: str, period: str = "1y", interval: str = "1d") -> Technica
     if not ta.dates:
         raise HTTPException(status_code=404, detail="no price data")
     return ta
+
+
+@router.get("/{symbol}/financials", response_model=Financials)
+def financials(symbol: str) -> Financials:
+    """Curated financial statements (annual + quarterly), cache-first (~weekly refresh)."""
+    return get_financials_cached(symbol.upper())
+
+
+@router.get("/{symbol}/dcf", response_model=DcfView)
+def dcf_view(
+    symbol: str,
+    growth: float | None = None,
+    discount: float | None = None,
+    terminal: float | None = None,
+    years: int | None = None,
+) -> DcfView:
+    """Two-stage DCF intrinsic value. Omit params to use sensible defaults (growth from FCF CAGR)."""
+    return compute_dcf(symbol.upper(), growth=growth, discount=discount,
+                       terminal_growth=terminal, years=years)
 
 
 @router.post("/{symbol}/analyze", response_model=SavedAnalysis)

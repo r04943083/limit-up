@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  getWatchlists, getWatchlistQuotes, addItem, removeItem, importCsv, importEbk,
+  getWatchlists, getWatchlistQuotes, addItem, removeItem, importEbk,
   createWatchlist, syncAll, renameWatchlist, deleteWatchlist, reorderWatchlists,
-  reorderItems, moveItem, updateItem, exportEbk,
+  reorderItems, moveItem, updateItem, exportEbk, exportAllJson, importJson,
   type Watchlist, type QuoteRow, type EbkImportResult,
 } from "@/lib/api";
 import { num, signedPct, dirClass } from "@/lib/format";
@@ -53,7 +53,7 @@ export default function ManageWatchlistModal({
   const dragItem = useRef<number | null>(null);
   const [dropGroup, setDropGroup] = useState<number | null>(null);
   const ebkRef = useRef<HTMLInputElement>(null);
-  const csvRef = useRef<HTMLInputElement>(null);
+  const jsonRef = useRef<HTMLInputElement>(null);
 
   const group = groups.find((g) => g.id === gid) ?? null;
   const changed = useCallback(() => onChanged?.(), [onChanged]);
@@ -113,12 +113,29 @@ export default function ManageWatchlistModal({
     catch (e) { setMsg(String(e)); } finally { setBusy(false); }
   };
   const remove = async (id: number) => { await removeItem(id); loadRows(); await loadGroups(); changed(); };
-  const onCsv = async (file: File) => {
-    if (gid == null) return; setBusy(true);
+  const exportBackup = async () => {
+    setBusy(true);
     try {
-      const { added } = await importCsv(gid, await file.text());
-      setMsg(`已从 CSV 导入 ${added} 个标的到「${group?.name}」。`); loadRows(); await loadGroups(); changed();
+      const data = await exportAllJson();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "lu-watchlist-backup.json";
+      a.click(); URL.revokeObjectURL(a.href);
+      setMsg("已导出自选备份(JSON):分组 / 标的 / 标签 / 排序 全在内。");
     } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+  };
+  const onJson = async (file: File) => {
+    setBusy(true);
+    try {
+      const data = JSON.parse(await file.text());
+      const replace = window.confirm(
+        "导入自选备份:\n\n「确定」= 替换(先清空现有全部分组,再按备份恢复)\n「取消」= 合并(保留现有,仅补充缺少的分组/标的)"
+      );
+      const res = await importJson(replace ? "replace" : "merge", data);
+      setMsg(`已${res.mode === "replace" ? "替换" : "合并"}导入 · 共加入 ${res.total_added} 个标的 · 涉及 ${res.groups.length} 个分组。`);
+      await loadGroups(); loadRows(); changed();
+    } catch (e) { setMsg(`导入失败:${String(e)}`); } finally { setBusy(false); }
   };
   const onEbk = async (files: FileList) => {
     setBusy(true); setMsg("正在解析富途 .ebk(每个文件 = 一个分组)…");
@@ -153,14 +170,15 @@ export default function ManageWatchlistModal({
         <div className="flex items-center justify-between px-5 h-12 border-b border-line">
           <h2 className="text-sm font-semibold">管理自选 · 分组 / 标的 / 标签 · 汇入汇出</h2>
           <div className="flex items-center gap-2">
+            <button onClick={exportBackup} disabled={busy} className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50" title="导出全部分组/标的/标签为 JSON 备份">⤓ 导出备份</button>
+            <button onClick={() => jsonRef.current?.click()} disabled={busy} className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50" title="从 JSON 备份恢复(可合并/替换)">⤒ 导入备份</button>
             <button onClick={() => ebkRef.current?.click()} disabled={busy} className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50">导入富途 .ebk</button>
-            <button onClick={() => csvRef.current?.click()} disabled={busy} className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50">导入 CSV</button>
             <button onClick={exportAll} disabled={busy || groups.length === 0} className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50">导出全部 .ebk</button>
             <button onClick={updateAll} disabled={busy} className="rounded-lg bg-accent/15 text-accent text-xs font-medium px-3 py-1.5 hover:bg-accent/25 disabled:opacity-50">{busy ? "更新中…" : "↻ 全部更新"}</button>
             <button onClick={onClose} className="text-ink-faint hover:text-ink text-lg leading-none ml-1">✕</button>
           </div>
           <input ref={ebkRef} type="file" accept=".ebk,text/plain" multiple className="hidden" onChange={(e) => e.target.files?.length && onEbk(e.target.files)} />
-          <input ref={csvRef} type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={(e) => e.target.files?.[0] && onCsv(e.target.files[0])} />
+          <input ref={jsonRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => e.target.files?.[0] && onJson(e.target.files[0])} />
         </div>
 
         <div className="flex-1 flex min-h-0">

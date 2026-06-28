@@ -1,21 +1,16 @@
-"""Watchlist service: CRUD + CSV import. Symbols are normalized and market-tagged."""
+"""Watchlist service: CRUD + JSON backup. Symbols are normalized and market-tagged."""
 from __future__ import annotations
 
-import csv
-import io
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
-from sqlalchemy import select
-
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from ..data.cache import ensure_stock
 from ..db import session_scope
 from ..db.models import Snapshot, Stock, Watchlist, WatchlistItem
 from ..markets import infer_market
 from .research import ResearchBundle
-
-_SYMBOL_HEADERS = {"symbol", "ticker", "code", "代码", "证券代码", "stock"}
 
 
 def _norm_tags(tags: str | None) -> str | None:
@@ -288,21 +283,81 @@ def quotes_for(watchlist_id: int) -> list[QuoteRow]:
         return rows
 
 
-def import_csv(watchlist_id: int, csv_text: str) -> int:
-    """Extract symbols from a CSV (broker export or simple list) and add them. Returns count added."""
-    reader = csv.reader(io.StringIO(csv_text))
-    rows = [r for r in reader if r]
-    if not rows:
-        return 0
-    header = [h.strip().lower() for h in rows[0]]
-    col = next((i for i, h in enumerate(header) if h in _SYMBOL_HEADERS), None)
-    data_rows = rows[1:] if col is not None else rows
-    if col is None:
-        col = 0  # no header -> first column is the symbol
-    added = 0
-    for r in data_rows:
-        if col < len(r):
-            sym = r[col].strip().upper()
-            if sym and add_item(watchlist_id, sym):
+# ── JSON backup (export / import) ──────────────────────────────────────────
+# A portable, human-readable snapshot of every group + item (symbol/tags/note/order).
+# This is the recommended way to back up and migrate a watchlist between machines.
+
+class JsonImportGroupResult(BaseModel):
+    group: str
+    added: int = 0
+    skipped: int = 0  # already present (merge mode)
+
+
+class JsonImportResult(BaseModel):
+    mode: str
+    groups: list[JsonImportGroupResult] = []
+    total_added: int = 0
+
+
+def export_all_json() -> dict:
+    """Serialize the entire watchlist tree to a plain dict (groups + items, ordered)."""
+    groups: list[dict] = []
+    for wl in list_watchlists():  # already sorted by (sort_order, id), items too
+        groups.append({
+            "name": wl.name,
+            "description": wl.description,
+            "sort_order": wl.sort_order,
+            "items": [
+                {"symbol": it.symbol, "tags": it.tags, "note": it.note, "sort_order": it.sort_order}
+                for it in wl.items
+            ],
+        })
+    return {
+        "version": 1,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "watchlists": groups,
+    }
+
+
+def _find_watchlist_by_name(name: str) -> WatchlistOut | None:
+    for wl in list_watchlists():
+        if wl.name == name:
+            return wl
+    return None
+
+
+def import_json(payload: dict, mode: str = "merge") -> JsonImportResult:
+    """Restore groups+items from an ``export_all_json`` payload.
+
+    mode="replace": delete all existing groups first, then recreate.
+    mode="merge":   reuse same-named groups, add only symbols not already present.
+    """
+    mode = "replace" if mode == "replace" else "merge"
+    result = JsonImportResult(mode=mode)
+    groups = payload.get("watchlists") or []
+
+    if mode == "replace":
+        for wl in list_watchlists():
+            delete_watchlist(wl.id)
+
+    for g in groups:
+        name = str(g.get("name") or "").strip()
+        if not name:
+            continue
+        existing = None if mode == "replace" else _find_watchlist_by_name(name)
+        wid = existing.id if existing else create_watchlist(name, g.get("description")).id
+        present = {it.symbol.upper() for it in (existing.items if existing else [])}
+        added = skipped = 0
+        for raw in g.get("items") or []:
+            sym = str(raw.get("symbol") or "").strip().upper()
+            if not sym:
+                continue
+            if sym in present:
+                skipped += 1
+                continue
+            if add_item(wid, sym, tags=raw.get("tags"), note=raw.get("note")):
+                present.add(sym)
                 added += 1
-    return added
+        result.groups.append(JsonImportGroupResult(group=name, added=added, skipped=skipped))
+        result.total_added += added
+    return result

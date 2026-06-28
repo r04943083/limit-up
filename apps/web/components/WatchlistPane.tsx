@@ -4,8 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sparkline from "./Sparkline";
 import ManageWatchlistModal from "./ManageWatchlistModal";
-import { getWatchlists, getWatchlistQuotes, type Watchlist, type QuoteRow } from "@/lib/api";
+import { getWatchlists, getWatchlistQuotes, getWatchlistHealth, type Watchlist, type QuoteRow } from "@/lib/api";
 import { num, signedPct, dirClass } from "@/lib/format";
+
+// Health is a QUALITY score (not price direction), so it uses its own palette —
+// brand teal = healthy, amber = neutral, gray = weak — to avoid the red/green price colors.
+function healthColor(score: number): string {
+  if (score >= 67) return "#21D0C3";
+  if (score >= 34) return "#E0A33E";
+  return "#8B98A5";
+}
 
 export default function WatchlistPane({
   activeSymbol,
@@ -29,6 +37,7 @@ export default function WatchlistPane({
   const [loading, setLoading] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   const [localRefresh, setLocalRefresh] = useState(0);
+  const [health, setHealth] = useState<Record<string, { score: number; label: string }>>({});
 
   const gid = groupId !== undefined ? groupId : innerGid;
   const setGid = (id: number) => {
@@ -55,6 +64,16 @@ export default function WatchlistPane({
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, [gid, refreshKey, localRefresh]);
+
+  useEffect(() => {
+    getWatchlistHealth()
+      .then((hs) => {
+        const m: Record<string, { score: number; label: string }> = {};
+        for (const h of hs) m[h.symbol.toUpperCase()] = { score: h.score, label: h.label };
+        setHealth(m);
+      })
+      .catch(() => {});
+  }, [refreshKey, localRefresh]);
 
   const openSymbol = (symbol: string) => {
     if (onSelect) onSelect(symbol);
@@ -110,7 +129,16 @@ export default function WatchlistPane({
               }`}
             >
               <div className="min-w-0">
-                <div className="text-[13px] text-ink truncate">{r.name ?? r.symbol}</div>
+                <div className="text-[13px] text-ink truncate flex items-center gap-1.5">
+                  {health[r.symbol.toUpperCase()] && (
+                    <span
+                      className="shrink-0 w-1.5 h-1.5 rounded-full"
+                      style={{ background: healthColor(health[r.symbol.toUpperCase()].score) }}
+                      title={`健康 ${Math.round(health[r.symbol.toUpperCase()].score)}/100 · ${health[r.symbol.toUpperCase()].label}`}
+                    />
+                  )}
+                  <span className="truncate">{r.name ?? r.symbol}</span>
+                </div>
                 <div className="text-[11px] text-ink-faint truncate">
                   {r.symbol}
                   {r.tags && <span className="ml-1 text-ink-faint/70">· {r.tags.split(",").slice(0, 2).join(" ")}</span>}

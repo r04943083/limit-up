@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import WatchlistPane from "@/components/WatchlistPane";
-import Terminal from "@/components/Terminal";
+import DeepResearch from "@/components/DeepResearch";
 
 export default function ResearchPage() {
   const params = useParams<{ symbol: string }>();
@@ -11,7 +11,7 @@ export default function ResearchPage() {
   return (
     <>
       <WatchlistPane activeSymbol={sym} />
-      <Terminal symbol={sym} />
+      <DeepResearch symbol={sym} />
     </>
   );
 }

@@ -1,7 +1,7 @@
-"""Watchlist CRUD + CSV import routes."""
+"""Watchlist CRUD + JSON backup + Futu .ebk import/export routes."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from lucore.services import watchlist as wl
@@ -53,9 +53,26 @@ class MoveItem(BaseModel):
     watchlist_id: int
 
 
+class ImportJson(BaseModel):
+    mode: str = "merge"  # "merge" | "replace"
+    data: dict
+
+
 @router.get("", response_model=list[wl.WatchlistOut])
 def list_all() -> list[wl.WatchlistOut]:
     return wl.list_watchlists()
+
+
+@router.get("/export-json")
+def export_json() -> dict:
+    """Full backup of every group + item as a portable JSON document."""
+    return wl.export_all_json()
+
+
+@router.post("/import-json", response_model=wl.JsonImportResult)
+def import_json(body: ImportJson) -> wl.JsonImportResult:
+    """Restore from an export-json backup. mode=merge (default) or replace."""
+    return wl.import_json(body.data, body.mode)
 
 
 @router.get("/default", response_model=wl.WatchlistOut)
@@ -136,11 +153,6 @@ def remove(item_id: int) -> dict:
 def quotes(watchlist_id: int) -> list[wl.QuoteRow]:
     """Dense quote rows (price + change + sparkline) read from stored snapshots (fast)."""
     return wl.quotes_for(watchlist_id)
-
-
-@router.post("/{watchlist_id}/import-csv")
-def import_csv(watchlist_id: int, csv_text: str = Body(..., media_type="text/plain")) -> dict:
-    return {"added": wl.import_csv(watchlist_id, csv_text)}
 
 
 @router.post("/import-ebk", response_model=EbkImportResult)

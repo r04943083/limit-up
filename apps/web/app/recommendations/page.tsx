@@ -11,8 +11,8 @@ import {
 import { num } from "@/lib/format";
 
 const LABELS: Record<string, string> = {
-  growth: "Growth", value: "Value", momentum: "Momentum", dividend: "Dividend",
-  ai: "AI / Semis", quality: "Quality", swing: "Swing",
+  growth: "成长", value: "价值", momentum: "动量", dividend: "红利",
+  ai: "AI 半导体", quality: "质量", swing: "波段",
 };
 
 function convTone(c: string | null): "up" | "down" | "amber" {
@@ -50,12 +50,12 @@ export default function RecommendationsPage() {
     <div className="flex-1 overflow-auto p-5 space-y-5">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">AI 推荐 · Recommendations</h1>
+          <h1 className="text-xl font-semibold tracking-tight">AI 推荐</h1>
           <p className="text-sm text-ink-dim">LU 量化筛选 · AI 大脑评分(中文)</p>
         </div>
         <button onClick={generate} disabled={busy}
           className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-2 hover:bg-accent/25 disabled:opacity-50">
-          {busy ? "Generating… (~30–90s)" : `Generate ${LABELS[cat] ?? cat}`}
+          {busy ? "生成中…(约 30–90 秒)" : `生成「${LABELS[cat] ?? cat}」推荐`}
         </button>
       </div>
 
@@ -74,7 +74,7 @@ export default function RecommendationsPage() {
 
       {recs.length === 0 ? (
         <p className="text-sm text-ink-faint">
-          No {LABELS[cat] ?? cat} recommendations yet. Click Generate to screen the universe and have the AI score the survivors.
+          还没有「{LABELS[cat] ?? cat}」类推荐。点上方「生成」按钮,先量化筛选股池,再由 AI 给入选标的评分。
         </p>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -82,12 +82,12 @@ export default function RecommendationsPage() {
             <Panel key={`${r.category}-${r.symbol}`} title={r.symbol} hint={LABELS[r.category] ?? r.category}>
               <div className="flex items-center justify-between mb-2">
                 <Link href={`/research/${encodeURIComponent(r.symbol)}`} className="text-accent text-sm">
-                  View research →
+                  查看研究 →
                 </Link>
                 <div className="flex items-center gap-2">
                   {r.conviction && <RecBadge rec={r.conviction} tone={convTone(r.conviction)} />}
                   {r.target_price != null && (
-                    <span className="text-xs text-ink-dim tnum">tgt {num(r.target_price)} · {r.time_horizon}</span>
+                    <span className="text-xs text-ink-dim tnum">目标 {num(r.target_price)} · {r.time_horizon}</span>
                   )}
                 </div>
               </div>
@@ -103,7 +103,7 @@ export default function RecommendationsPage() {
           ))}
         </div>
       )}
-      <p className="text-[11px] text-ink-faint">AI opinion · not financial advice</p>
+      <p className="text-[11px] text-ink-faint">AI 观点 · 非投资建议</p>
     </div>
   );
 }

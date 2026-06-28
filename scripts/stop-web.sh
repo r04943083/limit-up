@@ -7,6 +7,21 @@
 # Usage:  scripts/stop-web.sh
 set -uo pipefail
 
+case "${1:-}" in
+  -h|--help)
+    cat <<EOF
+LU 停止脚本 — 停掉后端(:8000)、前端(:3000)与 cloudflared 隧道。
+
+用法:
+  scripts/stop-web.sh        无选项,直接停止
+  scripts/stop-web.sh -h     显示本帮助
+
+策略:先杀 PID 文件里的 supervisor(阻止重启)及其进程组,再按端口兜底释放。
+启动见:scripts/start-web.sh --help
+EOF
+    exit 0 ;;
+esac
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 

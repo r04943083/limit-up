@@ -150,6 +150,18 @@ class Snapshot(Base, TimestampMixin):
     synced_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
 
 
+class FinancialsCache(Base):
+    """Cached financial statements (serialized Financials JSON) per symbol.
+
+    Statements only change quarterly, so this is refreshed lazily (≥7 days stale)
+    to keep the deep-research page instant after the first load."""
+    __tablename__ = "financials_cache"
+
+    symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
+    payload_json: Mapped[str] = mapped_column(Text)  # serialized data.base.Financials
+    fetched_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
+
+
 class Portfolio(Base, TimestampMixin):
     __tablename__ = "portfolios"
 

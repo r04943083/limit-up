@@ -86,9 +86,9 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <p className="text-base text-ink font-medium leading-relaxed">{r.headline}</p>
               <p className="text-sm text-ink-dim leading-relaxed">{r.market_summary}</p>
-              {r.opportunities.length > 0 && <Section title="机会 · Opportunities" tone="up" items={r.opportunities} />}
-              {r.risks.length > 0 && <Section title="风险 · Risks" tone="down" items={r.risks} />}
-              {r.action_items.length > 0 && <Section title="行动 · Action items" tone="accent" items={r.action_items} />}
+              {r.opportunities.length > 0 && <Section title="机会" tone="up" items={r.opportunities} />}
+              {r.risks.length > 0 && <Section title="风险" tone="down" items={r.risks} />}
+              {r.action_items.length > 0 && <Section title="行动建议" tone="accent" items={r.action_items} />}
               <p className="text-[11px] text-ink-faint pt-1">AI 观点 · 非投资建议</p>
             </div>
           ) : (

@@ -206,13 +206,13 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
                   {analysis.result.bear_case && <p className="text-xs text-ink-dim"><span className="text-down font-medium">空头 · </span>{analysis.result.bear_case}</p>}
                   {analysis.result.risks.length > 0 && (
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">风险 Risks</div>
+                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">风险</div>
                       <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{analysis.result.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
                     </div>
                   )}
                   {analysis.result.catalysts.length > 0 && (
                     <div>
-                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">催化剂 Catalysts</div>
+                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">催化剂</div>
                       <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{analysis.result.catalysts.map((c, i) => <li key={i}>{c}</li>)}</ul>
                     </div>
                   )}
@@ -228,7 +228,7 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
             <>
               {/* Dense quote grid (Futu 报价-style), from the latest daily bar + quote */}
               <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">报价 Quote</div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">报价</div>
                 <div className="grid grid-cols-2 gap-x-4">
                   <Stat label="最新价" value={num(q?.price)} tone={(q?.change_pct ?? 0) >= 0 ? "up" : "down"} />
                   <Stat label="涨跌幅" value={signedPct(q?.change_pct)} tone={(q?.change_pct ?? 0) >= 0 ? "up" : "down"} />
@@ -247,7 +247,7 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
               </div>
 
               <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">估值 Valuation</div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">估值</div>
                 <div className="grid grid-cols-2 gap-x-4">
                   <Stat label="市值" value={compact(f?.market_cap)} />
                   <Stat label="P/E (TTM)" value={num(f?.pe_ttm)} />
@@ -261,7 +261,7 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
               </div>
 
               <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">盈利能力 Profitability</div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">盈利能力</div>
                 <div className="grid grid-cols-2 gap-x-4">
                   <Stat label="毛利率" value={pct(f?.gross_margin)} />
                   <Stat label="营业利润率" value={pct(f?.operating_margin)} />
@@ -302,7 +302,7 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
                     {newsAna ? (
                       <>
                         <RecBadge
-                          rec={newsAna.result.overall === "bullish" ? "偏多 Bullish" : newsAna.result.overall === "bearish" ? "偏空 Bearish" : "中性 Neutral"}
+                          rec={newsAna.result.overall === "bullish" ? "偏多" : newsAna.result.overall === "bearish" ? "偏空" : "中性"}
                           tone={newsAna.result.overall === "bullish" ? "up" : newsAna.result.overall === "bearish" ? "down" : "amber"}
                         />
                         <span className="text-[11px] text-ink-faint">影响 {newsAna.result.impact}</span>
@@ -319,13 +319,13 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
                     <p className="text-sm text-ink-dim leading-relaxed">{newsAna.result.summary}</p>
                     {newsAna.result.bull_points.length > 0 && (
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-up mb-1">利好 Bull</div>
+                        <div className="text-[11px] uppercase tracking-wide text-up mb-1">利好</div>
                         <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{newsAna.result.bull_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
                       </div>
                     )}
                     {newsAna.result.bear_points.length > 0 && (
                       <div>
-                        <div className="text-[11px] uppercase tracking-wide text-down mb-1">利空 Bear</div>
+                        <div className="text-[11px] uppercase tracking-wide text-down mb-1">利空</div>
                         <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{newsAna.result.bear_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
                       </div>
                     )}

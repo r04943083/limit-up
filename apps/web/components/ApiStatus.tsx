@@ -34,7 +34,7 @@ export default function ApiStatus() {
             <span className="text-ink-faint">·</span> {health!.markets.join("/")}
           </>
         ) : (
-          "API offline — run `make api`"
+          "API 离线 — 请运行 `make api`"
         )}
       </span>
     </div>

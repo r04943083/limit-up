@@ -19,7 +19,7 @@ export default function Topbar() {
               setQ("");
             }
           }}
-          placeholder="Search ticker  ·  e.g. NVDA, 0700.HK"
+          placeholder="搜索代码  ·  如 NVDA、0700.HK、600519.SS"
           className="w-72 bg-panel border border-line rounded-lg px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent/60"
         />
       </div>
