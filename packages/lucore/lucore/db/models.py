@@ -84,3 +84,42 @@ class Analysis(Base, TimestampMixin):
     structured_json: Mapped[str | None] = mapped_column(Text)  # JSON blob of the validated output
     provider: Mapped[str] = mapped_column(String(32), default="claude_code")
     idempotency_key: Mapped[str] = mapped_column(String(64), default="")  # e.g. source hash or date
+
+
+class Portfolio(Base, TimestampMixin):
+    __tablename__ = "portfolios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    base_currency: Mapped[str] = mapped_column(String(8), default="USD")
+
+    holdings: Mapped[list["Holding"]] = relationship(
+        back_populates="portfolio", cascade="all, delete-orphan"
+    )
+
+
+class Holding(Base, TimestampMixin):
+    __tablename__ = "holdings"
+    __table_args__ = (UniqueConstraint("portfolio_id", "symbol", name="uq_holding"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), ForeignKey("stocks.symbol"), index=True)
+    quantity: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_cost: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str | None] = mapped_column(String(32))  # csv / futu / manual
+
+    portfolio: Mapped[Portfolio] = relationship(back_populates="holdings")
+
+
+class PortfolioSnapshot(Base):
+    __tablename__ = "portfolio_snapshots"
+    __table_args__ = (UniqueConstraint("portfolio_id", "date", name="uq_snapshot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    portfolio_id: Mapped[int] = mapped_column(ForeignKey("portfolios.id"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    total_value: Mapped[float] = mapped_column(Float, default=0.0)
+    total_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    return_pct: Mapped[float | None] = mapped_column(Float)
+    metrics_json: Mapped[str | None] = mapped_column(Text)

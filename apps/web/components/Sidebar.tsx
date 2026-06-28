@@ -8,7 +8,7 @@ const NAV: { label: string; href: string; soon?: boolean }[] = [
   { label: "Watchlist", href: "/watchlist" },
   { label: "Research", href: "/research/NVDA" },
   { label: "Recommendations", href: "/recommendations", soon: true },
-  { label: "Portfolio", href: "/portfolio", soon: true },
+  { label: "Portfolio", href: "/portfolio" },
   { label: "Paper Trading", href: "/paper", soon: true },
   { label: "Journal", href: "/journal", soon: true },
   { label: "AI Coach", href: "/coach", soon: true },

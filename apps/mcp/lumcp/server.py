@@ -13,6 +13,7 @@ from lucore.config import get_settings
 from lucore.data.router import get_router
 from lucore.db import init_db
 from lucore.markets import infer_market
+from lucore.services import portfolio as pf
 from lucore.services.analyze import AnalysisResult, persist_analysis
 from lucore.services.research import build_research_bundle, get_technical
 
@@ -75,6 +76,14 @@ def save_analysis(
     )
     saved = persist_analysis(symbol.strip().upper(), result, provider="mcp")
     return {"saved": True, "id": saved.id, "symbol": saved.symbol}
+
+
+@mcp.tool()
+def portfolio_analysis(portfolio_id: int = 0) -> dict:
+    """Deterministic portfolio analytics (value, P&L, allocation, concentration, correlation).
+    portfolio_id=0 -> the default portfolio. Reason over these facts, then optionally save a review."""
+    pid = portfolio_id or pf.ensure_default_portfolio()
+    return pf.get_analytics(pid).model_dump(mode="json")
 
 
 def main() -> None:

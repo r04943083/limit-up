@@ -147,6 +147,64 @@ export type Watchlist = {
   description: string | null;
   items: WatchlistItem[];
 };
+// ---- Portfolio ----
+export type Holding = {
+  id: number;
+  symbol: string;
+  market: string;
+  name: string | null;
+  quantity: number;
+  avg_cost: number | null;
+  source: string | null;
+};
+export type Position = {
+  symbol: string;
+  name: string | null;
+  market: string;
+  sector: string | null;
+  quantity: number;
+  avg_cost: number | null;
+  price: number | null;
+  currency: string;
+  market_value: number;
+  cost_basis: number;
+  pnl: number;
+  pnl_pct: number | null;
+  weight: number;
+};
+export type PortfolioAnalytics = {
+  base_currency: string;
+  positions: Position[];
+  total_value: number;
+  total_cost: number;
+  total_pnl: number;
+  total_pnl_pct: number | null;
+  sector_alloc: Record<string, number>;
+  market_alloc: Record<string, number>;
+  top_weight: number;
+  hhi: number;
+  correlation_symbols: string[];
+  correlation_matrix: (number | null)[][];
+};
+export type PortfolioReview = {
+  summary: string;
+  strengths: string[];
+  concerns: string[];
+  suggestions: string[];
+  risk_level: string;
+  diversification: string;
+};
+export const getPortfolio = () => get<{ id: number; holdings: Holding[] }>("/portfolio/default");
+export const addHolding = (pid: number, symbol: string, quantity: number, avg_cost?: number) =>
+  post<{ holdings: Holding[] }>(`/portfolio/${pid}/holdings`, { symbol, quantity, avg_cost });
+export const removeHolding = (id: number) =>
+  fetch(`${BASE}/portfolio/holdings/${id}`, { method: "DELETE" }).then((r) => r.json());
+export const importPortfolioCsv = (pid: number, csv: string) =>
+  post<{ added: number }>(`/portfolio/${pid}/import-csv`, csv, true);
+export const getAnalytics = (pid: number) => get<PortfolioAnalytics>(`/portfolio/${pid}/analytics`);
+export const getReview = (pid: number) => get<PortfolioReview | null>(`/portfolio/${pid}/review`);
+export const runReview = (pid: number) => post<PortfolioReview>(`/portfolio/${pid}/review`);
+
 export const getDefaultWatchlist = () => get<Watchlist>("/watchlists/default");
 export const addItem = (wid: number, symbol: string, tags?: string) =>
   post<WatchlistItem>(`/watchlists/${wid}/items`, { symbol, tags });
