@@ -9,7 +9,7 @@ from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
-from lucore.services.sync import SyncResult, sync_symbols
+from lucore.services.sync import SyncResult, sync_symbol
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -30,8 +30,14 @@ def research(symbol: str, cached: bool = True) -> ResearchBundle:
 
 @router.post("/{symbol}/sync", response_model=SyncResult)
 def sync_one(symbol: str) -> SyncResult:
-    """Pull latest live data for one symbol into the DB (snapshot + OHLCV)."""
-    return sync_symbols([symbol.upper()])
+    """Pull latest live data for one symbol into the DB (snapshot + daily/weekly/monthly OHLCV)."""
+    sym = symbol.upper()
+    ok = sync_symbol(sym, warm=True)  # warm all chart timeframes — user is viewing this stock
+    import datetime as dt
+    return SyncResult(
+        requested=1, synced=1 if ok else 0, failed=[] if ok else [sym],
+        synced_at=dt.datetime.now(dt.timezone.utc),
+    )
 
 
 @router.get("/{symbol}/ohlcv", response_model=list[Bar])

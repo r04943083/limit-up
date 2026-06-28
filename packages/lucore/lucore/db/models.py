@@ -49,6 +49,7 @@ class Watchlist(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # group order
 
     items: Mapped[list["WatchlistItem"]] = relationship(
         back_populates="watchlist", cascade="all, delete-orphan"
@@ -62,9 +63,10 @@ class WatchlistItem(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     watchlist_id: Mapped[int] = mapped_column(ForeignKey("watchlists.id"), index=True)
     symbol: Mapped[str] = mapped_column(String(32), ForeignKey("stocks.symbol"), index=True)
-    tags: Mapped[str | None] = mapped_column(String(256))  # comma-separated for now
+    tags: Mapped[str | None] = mapped_column(String(256))  # comma-separated, order = display order
     note: Mapped[str | None] = mapped_column(Text)
     health_score: Mapped[float | None] = mapped_column(Float)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # within-group order
 
     watchlist: Mapped[Watchlist] = relationship(back_populates="items")
     stock: Mapped[Stock] = relationship(back_populates="items")

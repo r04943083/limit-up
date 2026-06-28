@@ -39,6 +39,12 @@ export function sinceLabel(iso: string | null | undefined): string {
   return `${days} 天前`;
 }
 
+// Price-direction text color class (CN/Futu convention handled by tailwind tokens).
+export function dirClass(v: number | null | undefined): string {
+  if (v === null || v === undefined || Number.isNaN(v) || v === 0) return "text-flat";
+  return v > 0 ? "text-up" : "text-down";
+}
+
 export function recTone(rec: string | null | undefined): "up" | "down" | "amber" {
   const r = (rec || "").toLowerCase().replace(/[\s_]/g, "");
   if (r.includes("strongsell") || r === "sell" || r.includes("underperform")) return "down";

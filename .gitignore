@@ -19,6 +19,13 @@ data/
 *.sqlite
 *.parquet
 
+# Personal reference material (Futu screenshots + exported watchlists = holdings)
+reference/
+
+# Service supervisor PID files + logs (scripts/start-web.sh)
+*.pid
+*.log
+
 # Env / secrets
 .env
 .env.local

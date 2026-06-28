@@ -26,6 +26,7 @@ class ResearchBundle(BaseModel):
     technical_trend: str
     technical_signals: list[str]
     news: list[NewsItem]
+    spark: list[float] = []  # last ~40 daily closes, for watchlist mini-charts
     generated_at: dt.datetime
 
 
@@ -40,8 +41,10 @@ def build_research_bundle(symbol: str, news_limit: int = 6) -> ResearchBundle:
     router = get_router()
     quote = router.get_quote(symbol)
     fundamentals = router.get_fundamentals(symbol)
-    ta = get_technical(symbol)
+    bars = router.get_ohlcv(symbol, period="1y", interval="1d")
+    ta = compute_technical(bars)
     news = router.get_news(symbol, limit=news_limit)
+    spark = [b.close for b in bars[-40:] if b.close is not None]
     bundle = ResearchBundle(
         symbol=symbol,
         market=infer_market(symbol).value,
@@ -51,6 +54,7 @@ def build_research_bundle(symbol: str, news_limit: int = 6) -> ResearchBundle:
         technical_trend=ta.trend,
         technical_signals=ta.signals,
         news=news,
+        spark=spark,
         generated_at=dt.datetime.now(dt.timezone.utc),
     )
     save_snapshot(bundle)

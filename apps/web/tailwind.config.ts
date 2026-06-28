@@ -14,8 +14,14 @@ const config: Config = {
         "ink-dim": "#8B98A5", // secondary text
         "ink-faint": "#5B6672", // tertiary / labels
         accent: "#21D0C3", // brand teal (interactive)
-        up: "#22C55E", // gains (default green-up)
-        down: "#EF4444", // losses
+        // Price direction — CN/Futu convention: red = up (gains), green = down (losses).
+        up: "#F6465D", // gains (red)
+        down: "#2EBD85", // losses (green)
+        flat: "#8B98A5", // unchanged
+        // Quality colors (score/health: good=green, bad=red) — independent of price direction.
+        good: "#2EBD85",
+        warn: "#E0A33E",
+        bad: "#F6465D",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],

@@ -47,11 +47,11 @@ export default function RecommendationsPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="flex-1 overflow-auto p-5 space-y-5">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">AI Recommendations</h1>
-          <p className="text-sm text-ink-dim">Screened by LU, scored by the AI brain</p>
+          <h1 className="text-xl font-semibold tracking-tight">AI 推荐 · Recommendations</h1>
+          <p className="text-sm text-ink-dim">LU 量化筛选 · AI 大脑评分(中文)</p>
         </div>
         <button onClick={generate} disabled={busy}
           className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-2 hover:bg-accent/25 disabled:opacity-50">

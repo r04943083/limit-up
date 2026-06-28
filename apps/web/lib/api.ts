@@ -15,6 +15,20 @@ async function post<T>(path: string, body?: unknown, asText = false): Promise<T>
   if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
   return r.json();
 }
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
+  return r.json();
+}
+async function del<T>(path: string): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`API ${r.status}: ${path}`);
+  return r.json();
+}
 
 export type Health = {
   status: string;
@@ -63,7 +77,10 @@ export type Fundamentals = {
   week52_high: number | null;
   week52_low: number | null;
   avg_volume: number | null;
+  shares_outstanding: number | null;
+  float_shares: number | null;
   recommendation: string | null;
+  recommendation_mean: number | null;
   num_analysts: number | null;
   target_mean: number | null;
   target_high: number | null;
@@ -116,15 +133,19 @@ export type Technical = {
   macd: (number | null)[];
   macd_signal: (number | null)[];
   macd_hist: (number | null)[];
+  kdj_k: (number | null)[];
+  kdj_d: (number | null)[];
+  kdj_j: (number | null)[];
   latest: Record<string, number | null>;
   trend: string;
   signals: string[];
 };
-export const getTechnical = (s: string) => get<Technical>(`/stocks/${s}/technical`);
+export const getTechnical = (s: string, period = "1y", interval = "1d") =>
+  get<Technical>(`/stocks/${s}/technical?period=${period}&interval=${interval}`);
 // The chart needs OHLCV; the research bundle technical omits bars, so fetch raw bars too.
 export type OhlcvBar = { date: string; open: number; high: number; low: number; close: number; volume: number | null };
-export const getOhlcv = (s: string, period = "1y") =>
-  get<OhlcvBar[]>(`/stocks/${s}/ohlcv?period=${period}`);
+export const getOhlcv = (s: string, period = "1y", interval = "1d") =>
+  get<OhlcvBar[]>(`/stocks/${s}/ohlcv?period=${period}&interval=${interval}`);
 
 export type AnalysisResult = {
   summary: string;
@@ -175,11 +196,13 @@ export type WatchlistItem = {
   name: string | null;
   tags: string | null;
   note: string | null;
+  sort_order: number;
 };
 export type Watchlist = {
   id: number;
   name: string;
   description: string | null;
+  sort_order: number;
   items: WatchlistItem[];
 };
 // ---- Portfolio ----
@@ -314,10 +337,81 @@ export type UsageSummary = {
 };
 export const getUsageSummary = () => get<UsageSummary>("/usage/summary");
 
+// ---- Indices (status bar) ----
+export type IndexQuote = {
+  symbol: string;
+  name: string;
+  market: string;
+  price: number | null;
+  change: number | null;
+  change_pct: number | null;
+};
+export const getIndices = () => get<IndexQuote[]>("/markets/indices");
+
+export type OverviewRow = {
+  symbol: string;
+  name: string | null;
+  market: string | null;
+  sector: string | null;
+  price: number | null;
+  change_pct: number | null;
+  market_cap: number | null;
+};
+export const getOverview = () => get<OverviewRow[]>("/markets/overview");
+
+// ---- Dense watchlist quotes + groups ----
+export type QuoteRow = {
+  item_id: number;
+  symbol: string;
+  market: string;
+  name: string | null;
+  tags: string | null;
+  price: number | null;
+  change: number | null;
+  change_pct: number | null;
+  currency: string | null;
+  spark: number[];
+  synced_at: string | null;
+};
+export const getWatchlists = () => get<Watchlist[]>("/watchlists");
+export const createWatchlist = (name: string, description?: string) =>
+  post<Watchlist>("/watchlists", { name, description });
+export const getWatchlistQuotes = (wid: number) => get<QuoteRow[]>(`/watchlists/${wid}/quotes`);
+
+// ---- Futu .ebk import (one group per file) ----
+export type EbkSkipped = { raw: string; reason: string };
+export type EbkGroupResult = {
+  group: string;
+  watchlist_id: number;
+  parsed: number;
+  added: number;
+  skipped: EbkSkipped[];
+};
+export type EbkImportResult = { groups: EbkGroupResult[]; total_added: number };
+export const importEbk = (files: { name: string; content: string }[]) =>
+  post<EbkImportResult>("/watchlists/import-ebk", files);
+
+export type EbkExport = { filename: string; content: string; count: number };
+export const exportEbk = (wid: number) => get<EbkExport>(`/watchlists/${wid}/export-ebk`);
+
 export const getDefaultWatchlist = () => get<Watchlist>("/watchlists/default");
 export const addItem = (wid: number, symbol: string, tags?: string) =>
   post<WatchlistItem>(`/watchlists/${wid}/items`, { symbol, tags });
 export const removeItem = (itemId: number) =>
-  fetch(`${BASE}/watchlists/items/${itemId}`, { method: "DELETE" }).then((r) => r.json());
+  del<{ removed: boolean }>(`/watchlists/items/${itemId}`);
 export const importCsv = (wid: number, csv: string) =>
   post<{ added: number }>(`/watchlists/${wid}/import-csv`, csv, true);
+
+// ---- Watchlist management: groups + items reorder / rename / delete / move / tags ----
+export const renameWatchlist = (wid: number, name: string, description?: string) =>
+  patch<Watchlist>(`/watchlists/${wid}`, { name, description });
+export const deleteWatchlist = (wid: number) =>
+  del<{ removed: boolean }>(`/watchlists/${wid}`);
+export const reorderWatchlists = (orderedIds: number[]) =>
+  post<{ ok: boolean }>(`/watchlists/reorder`, { ordered_ids: orderedIds });
+export const reorderItems = (wid: number, orderedItemIds: number[]) =>
+  post<{ ok: boolean }>(`/watchlists/${wid}/reorder-items`, { ordered_item_ids: orderedItemIds });
+export const moveItem = (itemId: number, watchlistId: number) =>
+  post<{ ok: boolean }>(`/watchlists/items/${itemId}/move`, { watchlist_id: watchlistId });
+export const updateItem = (itemId: number, patch_: { tags?: string; note?: string }) =>
+  patch<WatchlistItem>(`/watchlists/items/${itemId}`, patch_);

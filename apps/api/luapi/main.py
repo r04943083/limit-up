@@ -14,7 +14,16 @@ from lucore.config import get_settings
 from lucore.db import init_db
 from lucore.scheduler.jobs import shutdown_scheduler, start_scheduler
 
-from .routers import briefing, portfolio, recommendations, stocks, sync, usage, watchlists
+from .routers import (
+    briefing,
+    markets,
+    portfolio,
+    recommendations,
+    stocks,
+    sync,
+    usage,
+    watchlists,
+)
 
 
 @asynccontextmanager
@@ -46,6 +55,7 @@ app.include_router(recommendations.router)
 app.include_router(sync.router)
 app.include_router(usage.router)
 app.include_router(briefing.router)
+app.include_router(markets.router)
 
 
 @app.get("/health")

@@ -89,9 +89,9 @@ export default function PortfolioPage() {
   const effNames = a && a.hhi > 0 ? 1 / a.hhi : null;
 
   return (
-    <div className="space-y-5">
+    <div className="flex-1 overflow-auto p-5 space-y-5">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">Portfolio</h1>
+        <h1 className="text-xl font-semibold tracking-tight">组合 · Portfolio</h1>
         {a && (
           <div className="text-right">
             <div className="text-2xl font-semibold tnum">

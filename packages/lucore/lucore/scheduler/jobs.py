@@ -20,6 +20,7 @@ _scheduler: BackgroundScheduler | None = None
 def _daily_job() -> None:
     """Sync data then generate the briefing. Imported lazily to avoid heavy import at startup."""
     from ..services.briefing import generate_briefing
+    from ..services.markets_svc import get_indices
     from ..services.sync import sync_all
 
     try:
@@ -27,6 +28,10 @@ def _daily_job() -> None:
         log.info("daily sync: %d/%d synced", res.synced, res.requested)
     except Exception:  # noqa: BLE001
         log.exception("daily sync failed")
+    try:
+        get_indices(force=True)  # warm the index ticker cache for the morning open
+    except Exception:  # noqa: BLE001
+        log.exception("index warm failed")
     try:
         generate_briefing()
         log.info("daily briefing generated")

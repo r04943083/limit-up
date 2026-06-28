@@ -30,6 +30,9 @@ class TechnicalAnalysis(BaseModel):
     macd_hist: list[float | None]
     atr14: list[float | None]
     vwap: list[float | None]
+    kdj_k: list[float | None] = []
+    kdj_d: list[float | None] = []
+    kdj_j: list[float | None] = []
     latest: dict[str, float | None]
     trend: str
     signals: list[str]
@@ -83,6 +86,13 @@ def compute_technical(bars: list[Bar]) -> TechnicalAnalysis:
     bb_upper, bb_lower = bb_mid + 2 * bb_std, bb_mid - 2 * bb_std
     rsi = _rsi(c)
     atr = _atr(df)
+    # KDJ (9,3,3): RSV -> K (EMA) -> D (EMA) -> J = 3K - 2D. Futu's default lower study.
+    low9 = df["low"].rolling(9).min()
+    high9 = df["high"].rolling(9).max()
+    rsv = ((c - low9) / (high9 - low9).replace(0, np.nan) * 100)
+    kdj_k = rsv.ewm(com=2, adjust=False).mean()
+    kdj_d = kdj_k.ewm(com=2, adjust=False).mean()
+    kdj_j = 3 * kdj_k - 2 * kdj_d
     typical = (df["high"] + df["low"] + df["close"]) / 3
     vwap = (typical * df["volume"]).cumsum() / df["volume"].cumsum().replace(0, np.nan)
 
@@ -120,11 +130,13 @@ def compute_technical(bars: list[Bar]) -> TechnicalAnalysis:
         bb_upper=_clean(bb_upper), bb_lower=_clean(bb_lower),
         rsi14=_clean(rsi), macd=_clean(macd), macd_signal=_clean(macd_signal),
         macd_hist=_clean(macd_hist), atr14=_clean(atr), vwap=_clean(vwap),
+        kdj_k=_clean(kdj_k), kdj_d=_clean(kdj_d), kdj_j=_clean(kdj_j),
         latest={
             "price": price, "sma20": last(sma20), "sma50": s50, "sma200": s200,
             "ema12": last(ema12), "ema26": last(ema26), "rsi14": rsi_last,
             "macd": last(macd), "macd_signal": last(macd_signal), "macd_hist": last(macd_hist),
             "atr14": last(atr), "bb_upper": last(bb_upper), "bb_lower": last(bb_lower),
+            "kdj_k": last(kdj_k), "kdj_d": last(kdj_d), "kdj_j": last(kdj_j),
         },
         trend=trend,
         signals=signals,

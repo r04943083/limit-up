@@ -22,7 +22,7 @@ export function RecBadge({ rec, tone }: { rec: string; tone: "up" | "down" | "am
 
 export function ScoreMeter({ score }: { score: number }) {
   const pct = Math.max(0, Math.min(10, score)) * 10;
-  const color = score >= 6.5 ? "#22C55E" : score >= 4 ? "#E0A33E" : "#EF4444";
+  const color = score >= 6.5 ? "#2EBD85" : score >= 4 ? "#E0A33E" : "#F6465D";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 rounded-full bg-panel-2 overflow-hidden">

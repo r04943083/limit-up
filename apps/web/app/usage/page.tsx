@@ -22,7 +22,7 @@ export default function UsagePage() {
   const maxTok = u ? Math.max(1, ...u.by_day.map((d) => d.total_tokens)) : 1;
 
   return (
-    <div className="space-y-5">
+    <div className="flex-1 overflow-auto p-5 space-y-5">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">AI 用量</h1>
         <p className="text-sm text-ink-dim">
