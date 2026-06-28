@@ -126,6 +126,18 @@ class LlmCall(Base, TimestampMixin):
     num_turns: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class Briefing(Base, TimestampMixin):
+    """A daily AI briefing: deterministic market/watchlist/portfolio facts assembled by LU,
+    narrated by the LLM. One per day (idempotent)."""
+    __tablename__ = "briefings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[str] = mapped_column(String(10), unique=True, index=True)  # YYYY-MM-DD
+    summary: Mapped[str | None] = mapped_column(Text)
+    structured_json: Mapped[str | None] = mapped_column(Text)
+    provider: Mapped[str] = mapped_column(String(32), default="claude_code")
+
+
 class Snapshot(Base, TimestampMixin):
     """Cached research bundle (quote + fundamentals + technical + news) per symbol.
     The `synced_at` lets the UI show freshness; reads prefer this over slow live fetches."""

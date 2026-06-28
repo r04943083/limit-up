@@ -260,6 +260,32 @@ export const getRecommendations = (category?: string) =>
 export const generateRecommendations = (category: string) =>
   post<Recommendation[]>(`/recommendations/generate?category=${category}`);
 
+// ---- Daily briefing + health ----
+export type BriefingResult = {
+  headline: string;
+  market_summary: string;
+  watchlist_highlights: string[];
+  opportunities: string[];
+  risks: string[];
+  action_items: string[];
+};
+export type SavedBriefing = {
+  date: string;
+  provider: string;
+  created_at: string;
+  result: BriefingResult;
+  facts: {
+    tracked_count?: number;
+    top_gainers?: { symbol: string; change_pct: number | null; price: number | null }[];
+    top_losers?: { symbol: string; change_pct: number | null; price: number | null }[];
+  };
+};
+export const getBriefing = () => get<SavedBriefing | null>("/briefing");
+export const generateBriefing = () => post<SavedBriefing>("/briefing/generate");
+
+export type HealthOut = { symbol: string; score: number; label: string; factors: string[] };
+export const getWatchlistHealth = () => get<HealthOut[]>("/briefing/health");
+
 // ---- LLM usage ----
 export type UsageCall = {
   id: number;

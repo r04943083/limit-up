@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     enable_hk: bool = Field(default=True)
     enable_cn: bool = Field(default=True)
 
+    # --- Scheduler (in-process APScheduler) ---
+    enable_scheduler: bool = Field(default=True)
+    briefing_hour: int = Field(default=8)     # local hour to auto-sync + write the daily briefing
+    briefing_minute: int = Field(default=30)
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / self.db_filename

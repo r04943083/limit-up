@@ -12,14 +12,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from lucore import __version__
 from lucore.config import get_settings
 from lucore.db import init_db
+from lucore.scheduler.jobs import shutdown_scheduler, start_scheduler
 
-from .routers import portfolio, recommendations, stocks, sync, usage, watchlists
+from .routers import briefing, portfolio, recommendations, stocks, sync, usage, watchlists
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    yield
+    start_scheduler()
+    try:
+        yield
+    finally:
+        shutdown_scheduler()
 
 
 app = FastAPI(title="limit-up (LU) API", version=__version__, lifespan=lifespan)
@@ -40,6 +45,7 @@ app.include_router(portfolio.router)
 app.include_router(recommendations.router)
 app.include_router(sync.router)
 app.include_router(usage.router)
+app.include_router(briefing.router)
 
 
 @app.get("/health")
