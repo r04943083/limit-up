@@ -8,6 +8,7 @@ from lucore.data.base import Bar, CompanyProfile, Financials, Quote
 from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
 from lucore.services.financials import DcfView, compute_dcf, get_financials_cached
+from lucore.services.intraday import IntradayPoint, get_intraday
 from lucore.services.profile import get_profile_cached
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
@@ -48,6 +49,12 @@ def ohlcv(symbol: str, period: str = "1y", interval: str = "1d") -> list[Bar]:
     if not bars:
         raise HTTPException(status_code=404, detail="no price data")
     return bars
+
+
+@router.get("/{symbol}/intraday", response_model=list[IntradayPoint])
+def intraday(symbol: str, range: str = "1d") -> list[IntradayPoint]:
+    """分时(1d/1m)或 5 日(5d/5m)。Live, not cached — intraday has many bars per day."""
+    return get_intraday(symbol.upper(), range)
 
 
 @router.get("/{symbol}/technical", response_model=TechnicalAnalysis)

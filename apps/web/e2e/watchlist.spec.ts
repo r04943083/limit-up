@@ -30,3 +30,28 @@ test("自选页:分组 / 选股 / 右栏公司名 / 个股 Tab", async ({ page }
   await page.waitForTimeout(1500);
   expectClean(w);
 });
+
+test("自选页:列排序 + 可定制副指标列 + 分时", async ({ page }) => {
+  const w = watch(page);
+  await page.goto("/watchlist");
+
+  // Sortable column headers (Futu-style).
+  await expect(page.getByRole("button", { name: /名称\/代码/ })).toBeVisible();
+  await page.getByRole("button", { name: /名称\/代码/ }).click(); // sort by name
+  await expect(page.getByRole("button", { name: /最新·涨跌/ })).toBeVisible();
+
+  // Customizable secondary metric: open the selector and switch to 换手率.
+  const metricBtn = page.locator('button[title="选择副指标 / 排序"]');
+  await metricBtn.click();
+  const metricMenu = page.locator("div.z-40.w-28");
+  await expect(metricMenu).toBeVisible();
+  await metricMenu.getByText("换手率", { exact: true }).click();
+  await expect(metricMenu).toBeHidden();
+
+  // 分时 view on a stock's 行情 (live; degrades gracefully — must not 5xx the page).
+  await page.locator('button:has-text("NVIDIA")').first().click();
+  await page.getByRole("button", { name: "分时", exact: true }).click();
+  await page.waitForTimeout(1200);
+
+  expectClean(w);
+});

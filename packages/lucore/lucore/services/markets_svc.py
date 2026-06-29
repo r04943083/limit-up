@@ -15,7 +15,8 @@ from ..db.models import Snapshot
 # (yfinance symbol, display name, market). Order = display order in the status bar.
 INDICES: list[tuple[str, str, str]] = [
     ("^DJI", "道琼斯", "US"),
-    ("^IXIC", "纳斯达克", "US"),
+    ("^IXIC", "纳斯达克", "US"),  # 纳斯达克综合指数(全部上市股,~3000+ 只)
+    ("^NDX", "纳指100", "US"),   # 纳斯达克100(最大 100 只非金融股);富途「纳指100」对应此处
     ("^GSPC", "标普500", "US"),
     ("^HSI", "恒生指数", "HK"),
     ("000001.SS", "上证指数", "CN"),

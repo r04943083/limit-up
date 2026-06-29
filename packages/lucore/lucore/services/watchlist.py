@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
-from ..data.cache import ensure_stock
+from ..compute import quote_metrics as qm
+from ..data.cache import ensure_stock, read_bars
 from ..db import session_scope
 from ..db.models import Snapshot, Stock, Watchlist, WatchlistItem
 from ..markets import infer_market
@@ -60,6 +61,17 @@ class QuoteRow(BaseModel):
     spark: list[float] = []
     synced_at: str | None = None
     sort_order: int = 0
+    # Futu-style extra columns (computed from cached bars + fundamentals; all ratios are fractions).
+    market_cap: float | None = None
+    pe_ttm: float | None = None
+    dividend_yield: float | None = None
+    beta: float | None = None
+    volume: float | None = None
+    amount: float | None = None  # 成交额 ≈ volume × price
+    turnover_rate: float | None = None  # 换手率 (fraction)
+    volume_ratio: float | None = None  # 量比 (raw ratio)
+    amplitude: float | None = None  # 振幅 (fraction)
+    pct_from_high: float | None = None  # 距 52 周高 (fraction, ≤ 0)
 
 
 def _item_out(item: WatchlistItem, stock: Stock | None) -> WatchlistItemOut:
@@ -293,10 +305,33 @@ def quotes_for(watchlist_id: int) -> list[QuoteRow]:
                     row.name = b.quote.name or name
                     row.spark = b.spark
                     row.synced_at = snap.synced_at.isoformat() if snap.synced_at else None
+                    _fill_extra_columns(row, b)
                 except Exception:  # noqa: BLE001 - a bad snapshot shouldn't break the list
                     pass
             rows.append(row)
         return rows
+
+
+def _fill_extra_columns(row: QuoteRow, b: ResearchBundle) -> None:
+    """Populate the Futu-style columns from cached fundamentals + the last few daily bars."""
+    f = b.fundamentals
+    row.market_cap = f.market_cap
+    row.pe_ttm = f.pe_ttm
+    row.dividend_yield = f.dividend_yield
+    row.beta = f.beta
+    bars = read_bars(row.symbol, "1d")
+    if not bars:
+        return
+    last = bars[-1]
+    prev_close = bars[-2].close if len(bars) > 1 else None
+    row.volume = last.volume
+    if last.volume and row.price:
+        row.amount = last.volume * row.price
+    shares = qm.shares_outstanding(f.market_cap, row.price)
+    row.turnover_rate = qm.turnover_rate(last.volume, shares)
+    row.volume_ratio = qm.volume_ratio(last.volume, [bar.volume for bar in bars[-6:-1] if bar.volume])
+    row.amplitude = qm.amplitude(last.high, last.low, prev_close)
+    row.pct_from_high = qm.pct_from_high(row.price, f.week52_high)
 
 
 # ── JSON backup (export / import) ──────────────────────────────────────────

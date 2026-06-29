@@ -248,6 +248,8 @@ class PaperAccount(Base, TimestampMixin):
     cash: Mapped[float] = mapped_column(Float, default=100000.0)
     starting_cash: Mapped[float] = mapped_column(Float, default=100000.0)
     base_currency: Mapped[str] = mapped_column(String(8), default="USD")
+    kind: Mapped[str] = mapped_column(String(8), default="manual")  # manual | ai
+    persona: Mapped[str | None] = mapped_column(String(32))  # persona key for kind='ai' arena accounts
 
 
 class PaperTrade(Base, TimestampMixin):

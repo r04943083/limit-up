@@ -32,6 +32,13 @@ def _daily_job() -> None:
         get_indices(force=True)  # warm the index ticker cache for the morning open
     except Exception:  # noqa: BLE001
         log.exception("index warm failed")
+    try:  # warm the AI-arena benchmark's daily bars so its equity curve stays current
+        from ..data.router import get_router
+        from ..services.arena import BENCHMARK
+
+        get_router().get_ohlcv(BENCHMARK[0], period="1y", interval="1d")
+    except Exception:  # noqa: BLE001
+        log.exception("arena benchmark warm failed")
     try:
         generate_briefing()
         log.info("daily briefing generated")

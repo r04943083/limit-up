@@ -146,6 +146,9 @@ export const getTechnical = (s: string, period = "1y", interval = "1d") =>
 export type OhlcvBar = { date: string; open: number; high: number; low: number; close: number; volume: number | null };
 export const getOhlcv = (s: string, period = "1y", interval = "1d") =>
   get<OhlcvBar[]>(`/stocks/${s}/ohlcv?period=${period}&interval=${interval}`);
+export type IntradayPoint = { t: string; price: number; volume: number | null };
+export const getIntraday = (s: string, range: "1d" | "5d" = "1d") =>
+  get<IntradayPoint[]>(`/stocks/${s}/intraday?range=${range}`);
 
 // ---- Deep research: financial statements + DCF ----
 export type StatementRow = { label: string; values: (number | null)[] };
@@ -426,6 +429,18 @@ export type QuoteRow = {
   currency: string | null;
   spark: number[];
   synced_at: string | null;
+  sort_order?: number;
+  // Futu-style extra columns (ratios are fractions; market_cap/amount/volume are raw)
+  market_cap: number | null;
+  pe_ttm: number | null;
+  dividend_yield: number | null;
+  beta: number | null;
+  volume: number | null;
+  amount: number | null;
+  turnover_rate: number | null;
+  volume_ratio: number | null;
+  amplitude: number | null;
+  pct_from_high: number | null;
 };
 export const getWatchlists = () => get<Watchlist[]>("/watchlists");
 export const createWatchlist = (name: string, description?: string) =>
@@ -569,6 +584,32 @@ export const getPaper = () => get<PaperAccount>("/paper/account");
 export const paperTrade = (symbol: string, side: "buy" | "sell", quantity: number, note?: string) =>
   post<PaperAccount>("/paper/trade", { symbol, side, quantity, note });
 export const resetPaper = () => post<PaperAccount>("/paper/reset");
+
+// ---- #8 + #13 AI 竞技场 Arena (persona-driven paper accounts that compete) ----
+export type PerfMetrics = {
+  total_return_pct: number | null; max_drawdown_pct: number | null; sharpe: number | null;
+  cagr_pct: number | null; volatility_pct: number | null;
+  best_day_pct: number | null; worst_day_pct: number | null;
+};
+export type ArenaPosition = {
+  symbol: string; name: string | null; sector: string | null; quantity: number; avg_cost: number;
+  price: number | null; market_value: number; weight: number; pnl: number; pnl_pct: number | null;
+  last_reason: string | null;
+};
+export type CurvePoint = { date: string; value: number };
+export type ArenaAgent = {
+  persona: string; name: string; tagline: string; style: string;
+  cash: number; invested: number; equity: number; starting_cash: number;
+  metrics: PerfMetrics; positions: ArenaPosition[]; trades_count: number;
+  last_decision_at: string | null; rank: number; curve: CurvePoint[];
+};
+export type ArenaBenchmark = { symbol: string; name: string; return_pct: number | null; curve: CurvePoint[] };
+export type ArenaOut = {
+  agents: ArenaAgent[]; benchmark: ArenaBenchmark; universe_size: number; updated_at: string | null;
+};
+export const getArena = () => get<ArenaOut>("/arena");
+export const arenaTick = () => post<ArenaOut>("/arena/tick", {});
+export const resetArena = () => post<ArenaOut>("/arena/reset", {});
 
 // ---- #9 策略构建器 Strategy backtest ----
 export type StrategySpec = {

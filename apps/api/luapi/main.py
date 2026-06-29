@@ -15,6 +15,7 @@ from lucore.db import init_db
 from lucore.scheduler.jobs import shutdown_scheduler, start_scheduler
 
 from .routers import (
+    arena,
     briefing,
     chat,
     cn,
@@ -65,6 +66,7 @@ app.include_router(markets.router)
 app.include_router(cn.router)
 app.include_router(journal.router)
 app.include_router(paper.router)
+app.include_router(arena.router)
 app.include_router(strategy.router)
 app.include_router(chat.router)
 app.include_router(studio.router)

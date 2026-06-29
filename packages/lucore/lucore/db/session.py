@@ -51,6 +51,10 @@ def init_db() -> None:
 _ADDED_COLUMNS: dict[str, dict[str, str]] = {
     "watchlists": {"sort_order": "INTEGER NOT NULL DEFAULT 0"},
     "watchlist_items": {"sort_order": "INTEGER NOT NULL DEFAULT 0"},
+    "paper_accounts": {
+        "kind": "TEXT NOT NULL DEFAULT 'manual'",
+        "persona": "TEXT",
+    },
 }
 
 

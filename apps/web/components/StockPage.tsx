@@ -1,37 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Terminal from "@/components/Terminal";
 import DeepResearch from "@/components/DeepResearch";
 import Panel from "@/components/Panel";
 import { Stat } from "@/components/ui";
-import { getProfile, type CompanyProfile } from "@/lib/api";
-import { compact, num, pct } from "@/lib/format";
+import { getProfile, getResearch, syncSymbol, type CompanyProfile, type ResearchBundle } from "@/lib/api";
+import { compact, num, pct, signedPct, dirClass } from "@/lib/format";
 
 const TABS = ["行情", "财报", "分红", "股东", "概况"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
- * Futu-style individual-stock page: one top tab bar over a dense content area.
- * 行情 reuses the Terminal (chart + quote/AI/news panel); 财报 reuses DeepResearch
- * (statements + DCF); 分红/股东/概况 render the cached CompanyProfile.
+ * Futu-style individual-stock page: a persistent quote header (always visible across
+ * sub-tabs) + a tab bar over a dense content area. 行情 reuses the Terminal (chart +
+ * quote/AI/news panel); 财报 reuses DeepResearch (statements + DCF); 分红/股东/概况
+ * render the cached CompanyProfile.
  */
 export default function StockPage({ symbol }: { symbol: string | null }) {
   const [tab, setTab] = useState<Tab>("行情");
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profLoading, setProfLoading] = useState(false);
+  const [rb, setRb] = useState<ResearchBundle | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
   const needsProfile = tab === "分红" || tab === "股东" || tab === "概况";
 
   useEffect(() => {
     setProfile(null);
+    setRb(null);
   }, [symbol]);
+
+  // Header quote (cache-first; refreshed when the user hits ↻ 更新).
+  useEffect(() => {
+    if (!symbol) return;
+    getResearch(symbol).then(setRb).catch(() => setRb(null));
+  }, [symbol, reloadKey]);
 
   useEffect(() => {
     if (!symbol || !needsProfile || profile) return;
     setProfLoading(true);
     getProfile(symbol).then(setProfile).catch(() => setProfile(null)).finally(() => setProfLoading(false));
   }, [symbol, needsProfile, profile]);
+
+  const sync = useCallback(() => {
+    if (!symbol) return;
+    setSyncing(true);
+    syncSymbol(symbol).then(() => setReloadKey((k) => k + 1)).catch(() => {}).finally(() => setSyncing(false));
+  }, [symbol]);
 
   if (!symbol) {
     return (
@@ -41,8 +58,38 @@ export default function StockPage({ symbol }: { symbol: string | null }) {
     );
   }
 
+  const q = rb?.quote;
+  const f = rb?.fundamentals;
+
   return (
     <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      {/* Persistent Futu-style quote header — visible on every sub-tab. */}
+      <div className="flex items-center justify-between gap-4 px-4 h-14 border-b border-line shrink-0">
+        <div className="flex items-baseline gap-2.5 min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight truncate">{f?.name ?? q?.name ?? symbol}</h1>
+          <span className="text-sm text-ink-dim">{symbol}</span>
+          {rb && <span className="px-1.5 py-0.5 rounded bg-panel-2 text-[10px] text-ink-faint">{rb.market}</span>}
+          <span className={`text-xl font-semibold tnum ml-1 ${dirClass(q?.change_pct)}`}>{q?.price != null ? num(q.price) : "—"}</span>
+          <span className={`text-sm tnum ${dirClass(q?.change_pct)}`}>
+            {q?.change != null ? (q.change >= 0 ? "+" : "") + num(q.change) : ""} {signedPct(q?.change_pct)}
+          </span>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="hidden xl:flex items-center gap-4 text-[11px] text-ink-faint">
+            <HdrStat k="总市值" v={compact(f?.market_cap)} />
+            <HdrStat k="PE(TTM)" v={num(f?.pe_ttm)} />
+            <HdrStat k="P/B" v={num(f?.pb)} />
+            <HdrStat k="股息率" v={pct(f?.dividend_yield)} />
+            <HdrStat k="52周高" v={num(f?.week52_high)} />
+            <HdrStat k="52周低" v={num(f?.week52_low)} />
+          </div>
+          <button onClick={sync} disabled={syncing}
+            className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50">
+            {syncing ? "更新中…" : "↻ 更新"}
+          </button>
+        </div>
+      </div>
+
       <div className="flex items-center gap-1 px-4 h-11 border-b border-line shrink-0">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
@@ -55,7 +102,7 @@ export default function StockPage({ symbol }: { symbol: string | null }) {
       </div>
 
       <div className="flex-1 min-h-0 flex">
-        {tab === "行情" && <Terminal symbol={symbol} />}
+        {tab === "行情" && <Terminal symbol={symbol} reloadKey={reloadKey} />}
         {tab === "财报" && <DeepResearch symbol={symbol} />}
         {needsProfile && (
           <div className="flex-1 min-w-0 overflow-auto p-5 space-y-5">
@@ -69,6 +116,10 @@ export default function StockPage({ symbol }: { symbol: string | null }) {
       </div>
     </div>
   );
+}
+
+function HdrStat({ k, v }: { k: string; v: string }) {
+  return <span className="whitespace-nowrap"><span className="text-ink-faint">{k}</span> <span className="tnum text-ink-dim">{v}</span></span>;
 }
 
 // Group dividends by calendar year (sum) for a compact annual bar row.

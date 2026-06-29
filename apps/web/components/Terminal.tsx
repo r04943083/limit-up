@@ -2,40 +2,47 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Chart from "@/components/Chart";
+import IntradayChart from "@/components/IntradayChart";
 import { Stat, RecBadge, ScoreMeter } from "@/components/ui";
 import {
-  getResearch, getTechnical, getOhlcv, getAnalysis, runAnalyze, syncSymbol,
+  getResearch, getTechnical, getOhlcv, getIntraday, getAnalysis, runAnalyze,
   getNewsAnalysis, runNewsAnalysis,
-  type ResearchBundle, type Technical, type OhlcvBar, type SavedAnalysis,
+  type ResearchBundle, type Technical, type OhlcvBar, type IntradayPoint, type SavedAnalysis,
   type SavedNewsAnalysis,
 } from "@/lib/api";
 import { num, compact, pct, signedPct, recTone, sinceLabel, dirClass } from "@/lib/format";
 
-const KLINES = [
-  { label: "日K", period: "1y", interval: "1d" },
-  { label: "周K", period: "5y", interval: "1wk" },
-  { label: "月K", period: "max", interval: "1mo" },
+// 分时/5日 are live intraday lines; 日K/周K/月K are cached candlesticks.
+const TIMEFRAMES = [
+  { label: "分时", kind: "intraday", range: "1d" },
+  { label: "5日", kind: "intraday", range: "5d" },
+  { label: "日K", kind: "kline", period: "1y", interval: "1d" },
+  { label: "周K", kind: "kline", period: "5y", interval: "1wk" },
+  { label: "月K", kind: "kline", period: "max", interval: "1mo" },
 ] as const;
 
 type Tab = "解读" | "报价估值" | "新闻舆情";
 
 // The Futu-style three-column terminal body (center chart + right tab panel) for one symbol.
 // The left WatchlistPane is rendered by the page so it can drive symbol selection.
-export default function Terminal({ symbol }: { symbol: string | null }) {
+export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | null; reloadKey?: number }) {
   const sym = symbol?.toUpperCase() ?? "";
 
   const [rb, setRb] = useState<ResearchBundle | null>(null);
   const [ta, setTa] = useState<Technical | null>(null);
   const [ohlcv, setOhlcv] = useState<OhlcvBar[] | null>(null);
+  const [intra, setIntra] = useState<IntradayPoint[] | null>(null);
+  const [daily, setDaily] = useState<OhlcvBar[] | null>(null);
   const [analysis, setAnalysis] = useState<SavedAnalysis | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [newsAna, setNewsAna] = useState<SavedNewsAnalysis | null>(null);
   const [analyzingNews, setAnalyzingNews] = useState(false);
-  const [kidx, setKidx] = useState(0);
+  const [kidx, setKidx] = useState(2);  // default to 日K
   const [tab, setTab] = useState<Tab>("解读");
   const [chartLoading, setChartLoading] = useState(false);
+
+  const tf = TIMEFRAMES[kidx];
 
   const loadBundle = useCallback(() => {
     if (!sym) return;
@@ -45,13 +52,26 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
 
   const loadChart = useCallback(() => {
     if (!sym) return;
-    const k = KLINES[kidx];
+    const k = TIMEFRAMES[kidx];
     setChartLoading(true);
-    Promise.all([getOhlcv(sym, k.period, k.interval), getTechnical(sym, k.period, k.interval)])
-      .then(([o, t]) => { setOhlcv(o); setTa(t); })
-      .catch((e) => setErr(String(e)))
-      .finally(() => setChartLoading(false));
+    if (k.kind === "intraday") {
+      getIntraday(sym, k.range)
+        .then((pts) => { setIntra(pts); })
+        .catch((e) => setErr(String(e)))
+        .finally(() => setChartLoading(false));
+    } else {
+      Promise.all([getOhlcv(sym, k.period, k.interval), getTechnical(sym, k.period, k.interval)])
+        .then(([o, t]) => { setOhlcv(o); setTa(t); })
+        .catch((e) => setErr(String(e)))
+        .finally(() => setChartLoading(false));
+    }
   }, [sym, kidx]);
+
+  // Daily bars for the 报价 stats (今开/最高/最低/成交量/振幅) — independent of the chart timeframe.
+  useEffect(() => {
+    if (!sym) { setDaily(null); return; }
+    getOhlcv(sym, "5d", "1d").then(setDaily).catch(() => setDaily(null));
+  }, [sym, reloadKey]);
 
   useEffect(() => {
     if (!sym) return;
@@ -59,17 +79,14 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
     getAnalysis(sym).then(setAnalysis).catch(() => {});
     setNewsAna(null);
     getNewsAnalysis(sym).then(setNewsAna).catch(() => {});
-  }, [sym, loadBundle]);
+    // reloadKey is bumped by StockPage's ↻ 更新 so the chart + bundle refresh together
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sym, loadBundle, reloadKey]);
 
   // Keep the previous chart visible while the next loads (avoids a jarring blank);
   // a subtle badge signals the refresh.
-  useEffect(() => { loadChart(); }, [loadChart]);
-
-  const sync = useCallback(() => {
-    setSyncing(true);
-    syncSymbol(sym).then(() => { loadBundle(); loadChart(); })
-      .catch((e) => setErr(String(e))).finally(() => setSyncing(false));
-  }, [sym, loadBundle, loadChart]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadChart(); }, [loadChart, reloadKey]);
 
   const analyze = useCallback(() => {
     setAnalyzing(true);
@@ -84,11 +101,14 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
   const f = rb?.fundamentals;
   const q = rb?.quote;
   const upside = f?.target_mean && q?.price ? ((f.target_mean - q.price) / q.price) * 100 : null;
-  // Today's O/H/L/Vol from the last daily bar (we don't have a separate intraday feed).
-  const last = kidx === 0 && ohlcv && ohlcv.length ? ohlcv[ohlcv.length - 1] : null;
-  const prev = kidx === 0 && ohlcv && ohlcv.length > 1 ? ohlcv[ohlcv.length - 2] : null;
+  // Today's O/H/L/Vol from the latest daily bar (loaded independently of the chart timeframe).
+  const last = daily && daily.length ? daily[daily.length - 1] : null;
+  const prev = daily && daily.length > 1 ? daily[daily.length - 2] : null;
   // 换手率 = 成交量 / 流通股本.
   const turnover = last?.volume && f?.float_shares ? (last.volume / f.float_shares) * 100 : null;
+  const amount = last?.volume && q?.price ? last.volume * q.price : null;  // 成交额
+  const amplitude = last?.high != null && last?.low != null && prev?.close
+    ? ((last.high - last.low) / prev.close) * 100 : null;  // 振幅
 
   if (!sym) {
     return (
@@ -100,41 +120,19 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
 
   return (
     <>
-      {/* Center: header + chart */}
+      {/* Center: chart (the quote header lives in StockPage, always visible across tabs) */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-4 px-5 h-14 border-b border-line">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight truncate">{f?.name ?? q?.name ?? sym}</h1>
-            <span className="text-sm text-ink-dim">{sym}</span>
-            {rb && <span className="px-1.5 py-0.5 rounded bg-panel-2 text-[10px] text-ink-faint">{rb.market}</span>}
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <span className={`text-xl font-semibold tnum ${dirClass(q?.change_pct)}`}>
-                {q?.price != null ? num(q.price) : "—"}
-              </span>{" "}
-              <span className={`text-sm tnum ${dirClass(q?.change_pct)}`}>
-                {q?.change != null ? (q.change >= 0 ? "+" : "") + num(q.change) : ""} {signedPct(q?.change_pct)}
-              </span>
-            </div>
-            <button onClick={sync} disabled={syncing}
-              className="rounded-lg border border-line text-xs px-3 py-1.5 text-ink-dim hover:text-ink hover:border-accent/40 disabled:opacity-50">
-              {syncing ? "更新中…" : "↻ 更新"}
-            </button>
-          </div>
-        </div>
-
         {err && <div className="mx-5 mt-3 rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
 
-        <div className="flex items-center gap-1 px-5 h-9 border-b border-line/60">
-          {KLINES.map((k, i) => (
+        <div className="flex items-center gap-1 px-5 h-9 border-t border-line/60">
+          {TIMEFRAMES.map((k, i) => (
             <button key={k.label} onClick={() => setKidx(i)}
               className={`px-2.5 py-1 rounded text-xs transition-colors ${i === kidx ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink"}`}>
               {k.label}
             </button>
           ))}
           <span className="ml-auto text-[11px] text-ink-faint">
-            {rb ? `数据更新于 ${sinceLabel(rb.generated_at)}` : ""}
+            {tf.kind === "intraday" ? "分时为实时数据" : rb ? `数据更新于 ${sinceLabel(rb.generated_at)}` : ""}
           </span>
         </div>
 
@@ -142,7 +140,11 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
           {chartLoading && (
             <span className="absolute top-5 right-6 z-10 text-[11px] text-ink-faint bg-panel/80 border border-line rounded px-2 py-0.5">加载中…</span>
           )}
-          {ohlcv && ta ? <Chart ohlcv={ohlcv} technical={ta} /> : (
+          {tf.kind === "intraday" ? (
+            intra ? <IntradayChart data={intra} baseline={prev?.close ?? null} /> : (
+              <div className="h-[420px] grid place-items-center text-ink-faint text-sm">{err ? "分时加载失败" : "分时加载中…"}</div>
+            )
+          ) : ohlcv && ta ? <Chart ohlcv={ohlcv} technical={ta} /> : (
             <div className="h-[420px] grid place-items-center text-ink-faint text-sm">
               {err ? "图表加载失败" : "图表加载中…"}
             </div>
@@ -239,6 +241,8 @@ export default function Terminal({ symbol }: { symbol: string | null }) {
                   <Stat label="最高" value={num(last?.high)} />
                   <Stat label="最低" value={num(last?.low)} />
                   <Stat label="成交量" value={compact(last?.volume ?? null)} />
+                  <Stat label="成交额" value={compact(amount)} />
+                  <Stat label="振幅" value={amplitude != null ? `${amplitude.toFixed(2)}%` : "—"} />
                   <Stat label="均量(日)" value={compact(f?.avg_volume)} />
                   <Stat label="换手率" value={turnover != null ? `${turnover.toFixed(2)}%` : "—"} />
                   <Stat label="总股本" value={compact(f?.shares_outstanding)} />

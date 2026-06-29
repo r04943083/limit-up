@@ -39,3 +39,15 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Watchlist price-change flash (red = up, green = down, per A-share convention). */
+@keyframes lu-flash-up {
+  0% { background-color: rgba(246, 70, 93, 0.28); }
+  100% { background-color: transparent; }
+}
+@keyframes lu-flash-down {
+  0% { background-color: rgba(46, 189, 133, 0.28); }
+  100% { background-color: transparent; }
+}
+.flash-up { animation: lu-flash-up 0.7s ease-out; }
+.flash-down { animation: lu-flash-down 0.7s ease-out; }
