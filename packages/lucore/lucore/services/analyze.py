@@ -15,7 +15,7 @@ from ..db import session_scope
 from ..db.models import Analysis
 from ..llm.base import LLMProvider, get_provider, with_chinese
 from . import usage
-from .research import ResearchBundle, build_research_bundle
+from .research import ResearchBundle, get_research
 
 SYSTEM_PROMPT = (
     "You are LU's equity analyst. You are given FACTS computed by LU's deterministic engine "
@@ -117,7 +117,10 @@ def persist_analysis(symbol: str, result: AnalysisResult, provider: str = "claud
 def analyze_stock(
     symbol: str, *, provider: LLMProvider | None = None, persona_system: str | None = None
 ) -> SavedAnalysis:
-    bundle = build_research_bundle(symbol)
+    # Cache-first: reason over the stored snapshot (fast + reliable). Only live-fetch when
+    # the symbol has never been synced — a live fetch on every AI call is slow and, right
+    # after a bulk seed, gets rate-limited by yfinance → empty facts / 500s.
+    bundle = get_research(symbol, cached=True)
     provider = provider or get_provider()
     system = with_chinese(persona_system or SYSTEM_PROMPT)
 

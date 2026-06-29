@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Panel from "@/components/Panel";
 import {
-  getScreenerMeta, runScreen, seedUniverse, getSeedProgress,
+  getScreenerMeta, runScreen, seedUniverse, getSeedProgress, fillFinancials,
   type ScreenerField, type IndexInfo, type ScreenFilter, type ScreenHit,
   type ScreenResult, type SeedProgress,
 } from "@/lib/api";
@@ -28,14 +28,51 @@ function fmtMetric(field: ScreenerField | undefined, v: number | null | undefine
   return v.toFixed(2);
 }
 
+// One-click preset strategies — each sets the filter ranges + sort. Values are in the
+// units the screener returns (x 倍 · % 百分比 · 亿).
+type Preset = {
+  key: string; label: string; hint: string;
+  ranges: Record<string, { min?: string; max?: string }>;
+  sort: string; desc: boolean; sectors?: string[];
+};
+const PRESETS: Preset[] = [
+  {
+    key: "value", label: "低估值", hint: "PE≤20 · PB≤3 · 有盈利",
+    ranges: { pe_ttm: { min: "0", max: "20" }, pb: { max: "3" } },
+    sort: "pe_ttm", desc: false,
+  },
+  {
+    key: "growth", label: "高成长", hint: "营收增速≥20% · 盈利增速≥15%",
+    ranges: { revenue_growth: { min: "20" }, earnings_growth: { min: "15" } },
+    sort: "revenue_growth", desc: true,
+  },
+  {
+    key: "dividend", label: "高股息", hint: "股息率≥3% · PE≤25",
+    ranges: { dividend_yield: { min: "3" }, pe_ttm: { min: "0", max: "25" } },
+    sort: "dividend_yield", desc: true,
+  },
+  {
+    key: "quality", label: "优质白马", hint: "ROE≥15% · 净利率≥12%",
+    ranges: { roe: { min: "15" }, net_margin: { min: "12" } },
+    sort: "roe", desc: true,
+  },
+  {
+    key: "ai", label: "AI / 科技成长", hint: "科技板块 · 营收增速≥15%",
+    ranges: { revenue_growth: { min: "15" } },
+    sort: "market_cap", desc: true, sectors: ["Technology"],
+  },
+];
+
 export default function ScreenerPage() {
   const router = useRouter();
   const [fields, setFields] = useState<ScreenerField[]>([]);
   const [indices, setIndices] = useState<IndexInfo[]>([]);
   const [ranges, setRanges] = useState<Record<string, { min?: string; max?: string }>>({});
   const [markets, setMarkets] = useState<string[]>([]);
+  const [sectors, setSectors] = useState<string[]>([]);
   const [sort, setSort] = useState("market_cap");
   const [desc, setDesc] = useState(true);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
   const [res, setRes] = useState<ScreenResult | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -43,10 +80,12 @@ export default function ScreenerPage() {
   const [seedKeys, setSeedKeys] = useState<string[]>([]);
   const [progress, setProgress] = useState<SeedProgress | null>(null);
   const [seedMsg, setSeedMsg] = useState<string | null>(null);
+  const [finProgress, setFinProgress] = useState<SeedProgress | null>(null);
 
   useEffect(() => {
     getScreenerMeta().then((m) => { setFields(m.fields); setIndices(m.indices); }).catch(() => {});
-    getSeedProgress().then(setProgress).catch(() => {});
+    getSeedProgress("snapshot").then(setProgress).catch(() => {});
+    getSeedProgress("financials").then(setFinProgress).catch(() => {});
   }, []);
 
   const fieldByKey = useMemo(() => Object.fromEntries(fields.map((f) => [f.key, f])), [fields]);
@@ -56,24 +95,47 @@ export default function ScreenerPage() {
     return g;
   }, [fields]);
 
-  const run = useCallback(() => {
+  const runWith = useCallback((
+    rs: Record<string, { min?: string; max?: string }>,
+    mk: string[], sec: string[], sf: string, sd: boolean,
+  ) => {
     setBusy(true);
     const filters: ScreenFilter[] = [];
-    for (const [field, r] of Object.entries(ranges)) {
+    for (const [field, r] of Object.entries(rs)) {
       const min = r.min !== undefined && r.min !== "" ? Number(r.min) : null;
       const max = r.max !== undefined && r.max !== "" ? Number(r.max) : null;
       if (min != null || max != null) filters.push({ field, min, max });
     }
-    runScreen({ filters, markets, sort_field: sort, sort_desc: desc, limit: 100 })
+    runScreen({ filters, markets: mk, sectors: sec, sort_field: sf, sort_desc: sd, limit: 100 })
       .then(setRes).catch(() => setRes(null)).finally(() => setBusy(false));
-  }, [ranges, markets, sort, desc]);
+  }, []);
+
+  const run = useCallback(() => runWith(ranges, markets, sectors, sort, desc),
+    [runWith, ranges, markets, sectors, sort, desc]);
+
+  const applyPreset = (p: Preset) => {
+    setRanges(p.ranges);
+    setSectors(p.sectors ?? []);
+    setSort(p.sort);
+    setDesc(p.desc);
+    setActivePreset(p.key);
+    runWith(p.ranges, markets, p.sectors ?? [], p.sort, p.desc);
+  };
 
   // Poll seed progress while a fill is running.
   useEffect(() => {
     if (!progress?.running) return;
-    const t = setInterval(() => getSeedProgress().then(setProgress).catch(() => {}), 2500);
+    const t = setInterval(() => getSeedProgress("snapshot").then(setProgress).catch(() => {}), 2500);
     return () => clearInterval(t);
   }, [progress?.running]);
+
+  useEffect(() => {
+    if (!finProgress?.running) return;
+    const t = setInterval(() => getSeedProgress("financials").then(setFinProgress).catch(() => {}), 3000);
+    return () => clearInterval(t);
+  }, [finProgress?.running]);
+
+  const doFillFinancials = () => fillFinancials().then(setFinProgress).catch(() => {});
 
   const doSeed = () => {
     if (seedKeys.length === 0) return;
@@ -125,6 +187,34 @@ export default function ScreenerPage() {
           )}
           {seedMsg && !progress?.running && <span className="text-xs text-ink-faint">{seedMsg}</span>}
         </div>
+        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-line">
+          <button onClick={doFillFinancials} disabled={finProgress?.running}
+            className="rounded-lg border border-line text-ink-dim text-sm px-4 py-1.5 hover:text-ink disabled:opacity-40">
+            {finProgress?.running ? "补全财报中…" : "补全财报三表"}
+          </button>
+          {finProgress?.running ? (
+            <span className="text-xs text-ink-dim tnum">
+              财报 {finProgress.done}/{finProgress.total}{finProgress.failed ? ` · 失败 ${finProgress.failed}` : ""}
+            </span>
+          ) : (
+            <span className="text-[11px] text-ink-faint">让估值带 / 历史分位全池可用(较慢,后台拉取,可关页)</span>
+          )}
+        </div>
+      </Panel>
+
+      {/* Preset strategies */}
+      <Panel title="预设策略" hint="一键套用常见选股思路 · 套用后可再微调条件">
+        <div className="flex flex-wrap gap-2">
+          {PRESETS.map((p) => (
+            <button key={p.key} onClick={() => applyPreset(p)} title={p.hint}
+              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                activePreset === p.key ? "border-accent text-accent bg-accent/10" : "border-line text-ink-dim hover:text-ink"
+              }`}>
+              {p.label}
+              <span className="block text-[10px] text-ink-faint leading-tight">{p.hint}</span>
+            </button>
+          ))}
+        </div>
       </Panel>
 
       {/* Filters */}
@@ -152,11 +242,11 @@ export default function ScreenerPage() {
                     <span className="w-28 shrink-0 text-ink-dim truncate">{f.label}<span className="text-ink-faint text-[11px]"> {f.unit}</span></span>
                     <input inputMode="decimal" placeholder="≥ 最小"
                       value={ranges[f.key]?.min ?? ""}
-                      onChange={(e) => setRanges((p) => ({ ...p, [f.key]: { ...p[f.key], min: e.target.value } }))}
+                      onChange={(e) => { setActivePreset(null); setRanges((p) => ({ ...p, [f.key]: { ...p[f.key], min: e.target.value } })); }}
                       className="w-24 rounded-md bg-panel-2 border border-line px-2 py-1 text-xs outline-none focus:border-accent" />
                     <input inputMode="decimal" placeholder="≤ 最大"
                       value={ranges[f.key]?.max ?? ""}
-                      onChange={(e) => setRanges((p) => ({ ...p, [f.key]: { ...p[f.key], max: e.target.value } }))}
+                      onChange={(e) => { setActivePreset(null); setRanges((p) => ({ ...p, [f.key]: { ...p[f.key], max: e.target.value } })); }}
                       className="w-24 rounded-md bg-panel-2 border border-line px-2 py-1 text-xs outline-none focus:border-accent" />
                   </div>
                 ))}
@@ -175,7 +265,7 @@ export default function ScreenerPage() {
             className="rounded-lg border border-line text-ink-dim text-xs px-2 py-1 hover:text-ink">
             {desc ? "从高到低 ↓" : "从低到高 ↑"}
           </button>
-          <button onClick={() => { setRanges({}); setMarkets([]); }}
+          <button onClick={() => { setRanges({}); setMarkets([]); setSectors([]); setActivePreset(null); }}
             className="rounded-lg border border-line text-ink-dim text-xs px-3 py-1 hover:text-ink ml-auto">重置</button>
           <button onClick={run} disabled={busy}
             className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-5 py-1.5 hover:bg-accent/25 disabled:opacity-40">

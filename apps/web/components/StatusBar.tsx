@@ -34,6 +34,7 @@ export default function StatusBar() {
       const total = r.feeds ? Object.keys(r.feeds).length : 0;
       setNote(
         `已更新 ${r.synced}/${r.requested}` +
+        (r.skipped_fresh ? ` · 跳过新鲜 ${r.skipped_fresh}` : "") +
         (total ? ` · 行情 ${feeds}/${total}` : "") +
         (r.failed.length ? ` · 失败 ${r.failed.length}` : ""),
       );

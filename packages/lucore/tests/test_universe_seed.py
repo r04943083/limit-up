@@ -70,3 +70,23 @@ def test_symbols_missing_snapshot(env, monkeypatch):
     with session_scope() as s:
         s.add(Snapshot(symbol="NVDA", bundle_json="{}"))
     assert env.symbols_missing_snapshot() == ["AAPL"]
+
+
+def test_symbols_missing_financials(env, monkeypatch):
+    from lucore.db import session_scope
+    from lucore.db.models import FinancialsCache, Stock
+
+    with session_scope() as s:
+        s.add_all([Stock(symbol="NVDA", market="US", name="NVIDIA"),
+                   Stock(symbol="AAPL", market="US", name="Apple")])
+    with session_scope() as s:
+        s.add(FinancialsCache(symbol="NVDA", payload_json="{}"))
+    assert env.symbols_missing_financials() == ["AAPL"]
+
+
+def test_seed_progress_two_independent_jobs(env):
+    snap = env.seed_progress("snapshot")
+    fin = env.seed_progress("financials")
+    assert snap["running"] is False and fin["running"] is False
+    # Distinct dicts — updating one job must not bleed into the other.
+    assert snap is not fin

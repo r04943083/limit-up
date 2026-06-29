@@ -60,6 +60,62 @@ def test_failed_fundamentals_are_tolerated(monkeypatch):
     assert r.synced == 2              # snapshot pass unaffected
 
 
+def test_fresh_symbols_are_skipped(tmp_path, monkeypatch):
+    """A symbol synced within max_age_hours is skipped; stale/missing ones still sync."""
+    import datetime as dt
+
+    monkeypatch.setenv("LU_DATA_DIR", str(tmp_path))
+    from lucore.config import get_settings
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]
+    import lucore.db.session as session_mod
+
+    session_mod._engine = None
+    session_mod._SessionLocal = None
+    from lucore.db import init_db, session_scope
+    from lucore.db.models import Snapshot
+
+    init_db()
+    now = dt.datetime.now(dt.timezone.utc)
+    with session_scope() as s:
+        s.add(Snapshot(symbol="AAA", bundle_json="{}", synced_at=now))                       # fresh
+        s.add(Snapshot(symbol="BBB", bundle_json="{}", synced_at=now - dt.timedelta(days=2)))  # stale
+
+    _patch_common(monkeypatch)
+    synced_syms: list[str] = []
+    real = sync.sync_symbols
+    monkeypatch.setattr(sync, "sync_symbols", lambda syms, **k: (synced_syms.extend(syms) or real(syms, **k)))
+
+    r = sync.sync_all(deep=False, max_age_hours=6.0)
+    assert "AAA" not in synced_syms        # fresh → skipped
+    assert "BBB" in synced_syms            # stale → synced
+    assert r.skipped_fresh == 1
+    assert r.requested == 2                # still reports against everything tracked
+
+
+def test_max_age_zero_forces_full(tmp_path, monkeypatch):
+    import datetime as dt
+
+    monkeypatch.setenv("LU_DATA_DIR", str(tmp_path))
+    from lucore.config import get_settings
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]
+    import lucore.db.session as session_mod
+
+    session_mod._engine = None
+    session_mod._SessionLocal = None
+    from lucore.db import init_db, session_scope
+    from lucore.db.models import Snapshot
+
+    init_db()
+    with session_scope() as s:
+        s.add(Snapshot(symbol="AAA", bundle_json="{}", synced_at=dt.datetime.now(dt.timezone.utc)))
+
+    _patch_common(monkeypatch)
+    r = sync.sync_all(deep=False, max_age_hours=0)
+    assert r.skipped_fresh == 0  # forced full refresh ignores freshness
+
+
 def test_failing_feed_marked_false(monkeypatch):
     _patch_common(monkeypatch)
 

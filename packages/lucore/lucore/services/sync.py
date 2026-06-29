@@ -26,6 +26,7 @@ class SyncResult(BaseModel):
     # /sync responses stay valid without them.
     financials_synced: int = 0
     profiles_synced: int = 0
+    skipped_fresh: int = 0  # symbols skipped because their snapshot was still fresh
     feeds: dict[str, bool] = {}  # global market feeds refreshed: indices / limit_up / ...
 
 
@@ -38,6 +39,25 @@ def tracked_symbols() -> list[str]:
     for sym in [*wl, *hold]:
         seen.setdefault(sym.upper(), None)
     return list(seen)
+
+
+def _fresh_symbols(symbols: list[str], max_age_hours: float) -> set[str]:
+    """Of `symbols`, those whose snapshot was synced within `max_age_hours` — safe to skip
+    on a re-sync. Makes repeated 「全部更新」 near-instant instead of re-fetching everything."""
+    if max_age_hours <= 0:
+        return set()
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=max_age_hours)
+    want = {s.upper() for s in symbols}
+    fresh: set[str] = set()
+    with session_scope() as s:
+        for snap in s.execute(select(Snapshot)).scalars():
+            if snap.symbol.upper() in want and snap.synced_at is not None:
+                synced = snap.synced_at
+                if synced.tzinfo is None:
+                    synced = synced.replace(tzinfo=dt.timezone.utc)
+                if synced >= cutoff:
+                    fresh.add(snap.symbol.upper())
+    return fresh
 
 
 # Chart timeframes to pre-warm so the research page renders every period from the DB
@@ -137,18 +157,23 @@ def _refresh_global_feeds() -> dict[str, bool]:
     return feeds
 
 
-def sync_all(deep: bool = True) -> SyncResult:
+def sync_all(deep: bool = True, max_age_hours: float = 6.0) -> SyncResult:
     """One-click refresh of everything that's cheap to keep current:
 
     1. A research snapshot (quote + fundamentals + technical + news) for every tracked symbol.
     2. (deep) financials + profile for those same symbols — fills the usually-empty 财报/概况.
     3. Global market feeds: indices + A-share limit-up / dragon-tiger / HSGT.
 
-    Per-stock AI (analyses) and the daily briefing are *not* triggered here — they cost LLM
-    tokens and have their own buttons / 08:30 scheduler. Whole-universe (625) financials are
-    also skipped: too many. `deep=False` does only the snapshot pass (the old behavior)."""
-    symbols = tracked_symbols()
+    Staleness-aware: symbols whose snapshot was synced within `max_age_hours` are skipped, so a
+    second 「全部更新」 in the same session is near-instant (only the global feeds refresh).
+    Pass `max_age_hours=0` to force a full refresh. Per-stock AI + the daily briefing are NOT
+    triggered here (LLM cost; own buttons / 08:30 scheduler)."""
+    tracked = tracked_symbols()
+    fresh = _fresh_symbols(tracked, max_age_hours)
+    symbols = [s for s in tracked if s.upper() not in fresh]
     result = sync_symbols(symbols)
+    result.skipped_fresh = len(fresh)
+    result.requested = len(tracked)  # report against everything tracked, not just the stale subset
 
     if deep and symbols:
         fin_n = prof_n = 0

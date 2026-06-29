@@ -18,7 +18,7 @@ from ..db.models import Analysis
 from ..llm.base import LLMProvider, get_provider, with_chinese
 from . import usage
 from .analyze import _facts
-from .research import build_research_bundle
+from .research import get_research
 
 
 class DebateResult(BaseModel):
@@ -52,7 +52,7 @@ _SPEC = {
 
 
 def run_debate(symbol: str, *, provider: LLMProvider | None = None) -> SavedDebate:
-    bundle = build_research_bundle(symbol)
+    bundle = get_research(symbol, cached=True)  # cache-first: reliable + no rate-limit 500s
     provider = provider or get_provider()
     prompt = (
         f"Stage a rigorous bull-vs-bear debate on {bundle.symbol}, then judge it. Both sides argue "

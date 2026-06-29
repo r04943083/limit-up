@@ -123,6 +123,7 @@ export type SyncResult = {
   synced_at: string;
   financials_synced?: number;
   profiles_synced?: number;
+  skipped_fresh?: number;
   feeds?: Record<string, boolean>;
 };
 export const syncSymbol = (s: string) => post<SyncResult>(`/stocks/${s}/sync`);
@@ -794,4 +795,6 @@ export type SeedResult = { indices: IndexSeed[]; total_fetched: number; added: n
 export type SeedResponse = { seed: SeedResult; progress: SeedProgress };
 export const seedUniverse = (keys: string[], fill = true) =>
   post<SeedResponse>("/screener/universe/seed", { keys, fill });
-export const getSeedProgress = () => get<SeedProgress>("/screener/universe/progress");
+export const getSeedProgress = (kind: "snapshot" | "financials" = "snapshot") =>
+  get<SeedProgress>(`/screener/universe/progress?kind=${kind}`);
+export const fillFinancials = () => post<SeedProgress>("/screener/universe/fill-financials");

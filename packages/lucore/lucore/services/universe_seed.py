@@ -82,55 +82,97 @@ def symbols_missing_snapshot() -> list[str]:
     return sorted(stocks - snapped)
 
 
-# --- Background snapshot fill ------------------------------------------------
-# A personal single-process API: a daemon thread fills snapshots while the user keeps
-# browsing, with progress polled by the /screener page. Only one fill runs at a time.
-_progress: dict = {"running": False, "done": 0, "total": 0, "failed": 0,
-                   "started_at": None, "finished_at": None}
+def symbols_missing_financials() -> list[str]:
+    """Universe symbols that have no cached financial statements yet."""
+    from ..db.models import FinancialsCache
+
+    with session_scope() as s:
+        stocks = set(s.execute(select(Stock.symbol)).scalars().all())
+        have = set(s.execute(select(FinancialsCache.symbol)).scalars().all())
+    return sorted(stocks - have)
+
+
+# --- Background fills --------------------------------------------------------
+# A personal single-process API: daemon threads fill data while the user keeps browsing,
+# with progress polled by the /screener page. Two independent jobs (snapshots, financials);
+# each runs at most one at a time.
+def _new_progress() -> dict:
+    return {"running": False, "done": 0, "total": 0, "failed": 0,
+            "started_at": None, "finished_at": None}
+
+
+_progress: dict[str, dict] = {"snapshot": _new_progress(), "financials": _new_progress()}
 _lock = threading.Lock()
 
 
-def seed_progress() -> dict:
+def seed_progress(kind: str = "snapshot") -> dict:
     with _lock:
-        return dict(_progress)
+        return dict(_progress[kind])
 
 
-def _run_fill(symbols: list[str]) -> None:
+def _run_fill(kind: str, symbols: list[str], worker) -> None:  # noqa: ANN001
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from .sync import _SYNC_WORKERS, sync_symbol
+    from .sync import _SYNC_WORKERS
 
     now = dt.datetime.now(dt.timezone.utc).isoformat()
     with _lock:
-        _progress.update(running=True, done=0, total=len(symbols), failed=0,
-                         started_at=now, finished_at=None)
+        _progress[kind] = {"running": True, "done": 0, "total": len(symbols),
+                           "failed": 0, "started_at": now, "finished_at": None}
     try:
         if symbols:
             with ThreadPoolExecutor(max_workers=min(_SYNC_WORKERS, len(symbols))) as pool:
-                futs = [pool.submit(sync_symbol, sym) for sym in symbols]
+                futs = [pool.submit(worker, sym) for sym in symbols]
                 for fut in as_completed(futs):
                     try:
                         ok = bool(fut.result())
                     except Exception:  # noqa: BLE001
                         ok = False
                     with _lock:
-                        _progress["done"] += 1
+                        _progress[kind]["done"] += 1
                         if not ok:
-                            _progress["failed"] += 1
+                            _progress[kind]["failed"] += 1
     finally:
         with _lock:
-            _progress.update(running=False, finished_at=dt.datetime.now(dt.timezone.utc).isoformat())
+            _progress[kind]["running"] = False
+            _progress[kind]["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
 
 
 def start_snapshot_fill(only_missing: bool = True) -> dict:
     """Kick the background snapshot fill (no-op if one is already running). Returns progress."""
     with _lock:
-        if _progress["running"]:
-            return dict(_progress)
+        if _progress["snapshot"]["running"]:
+            return dict(_progress["snapshot"])
     if only_missing:
         symbols = symbols_missing_snapshot()
     else:
         with session_scope() as s:
             symbols = list(s.execute(select(Stock.symbol)).scalars().all())
-    threading.Thread(target=_run_fill, args=(symbols,), daemon=True).start()
-    return seed_progress()
+
+    from .sync import sync_symbol
+
+    threading.Thread(target=_run_fill, args=("snapshot", symbols, sync_symbol), daemon=True).start()
+    return seed_progress("snapshot")
+
+
+def start_financials_fill(only_missing: bool = True) -> dict:
+    """Kick the background financials + profile fill so the valuation band / percentile work
+    for the whole pool. Heavy (one extra yfinance round-trip per symbol) — runs in the
+    background. No-op if one is already running."""
+    with _lock:
+        if _progress["financials"]["running"]:
+            return dict(_progress["financials"])
+    if only_missing:
+        symbols = symbols_missing_financials()
+    else:
+        with session_scope() as s:
+            symbols = list(s.execute(select(Stock.symbol)).scalars().all())
+
+    from .sync import _refresh_fundamentals
+
+    def worker(sym: str) -> bool:
+        fin_ok, _prof_ok = _refresh_fundamentals(sym)
+        return fin_ok
+
+    threading.Thread(target=_run_fill, args=("financials", symbols, worker), daemon=True).start()
+    return seed_progress("financials")

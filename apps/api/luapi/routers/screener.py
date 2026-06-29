@@ -14,6 +14,7 @@ from lucore.services.universe_seed import (
     SeedResult,
     seed_indices,
     seed_progress,
+    start_financials_fill,
     start_snapshot_fill,
 )
 
@@ -66,6 +67,13 @@ def seed(req: SeedRequest) -> SeedResponse:
 
 
 @router.get("/universe/progress")
-def progress() -> dict:
-    """Background snapshot-fill progress (poll while seeding)."""
-    return seed_progress()
+def progress(kind: str = "snapshot") -> dict:
+    """Background fill progress (poll while seeding). kind = snapshot | financials."""
+    return seed_progress(kind if kind in ("snapshot", "financials") else "snapshot")
+
+
+@router.post("/universe/fill-financials")
+def fill_financials() -> dict:
+    """Start the background financials + profile fill for the whole pool (so the valuation
+    band / percentile become available pool-wide). Heavy; poll progress with kind=financials."""
+    return start_financials_fill(only_missing=True)

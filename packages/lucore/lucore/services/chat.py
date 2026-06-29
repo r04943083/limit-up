@@ -18,7 +18,7 @@ from ..db.models import ChatMessage
 from ..llm.base import LLMProvider, get_provider, with_chinese
 from . import usage
 from .analyze import _facts
-from .research import build_research_bundle
+from .research import get_research
 
 _TICKER_RE = re.compile(r"\b([A-Z]{1,5}(?:\.[A-Z]{2})?|\d{4,6}\.[A-Z]{2})\b")
 _STOP = {"AI", "US", "HK", "CN", "DCF", "PE", "PB", "PS", "ROE", "RSI", "MACD", "ETF", "IPO", "GDP", "CEO"}
@@ -78,7 +78,7 @@ def _ground(symbols: list[str]) -> tuple[str, list[str]]:
     blocks: list[dict] = []
     for sym in symbols:
         try:
-            blocks.append(_facts(build_research_bundle(sym)))
+            blocks.append(_facts(get_research(sym, cached=True)))
             used.append(sym)
         except Exception:  # noqa: BLE001
             continue
