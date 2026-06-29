@@ -122,7 +122,7 @@ def get_account() -> PaperAccountOut:
         positions.append(PaperPosition(
             symbol=sym, quantity=round(p["qty"], 4), avg_cost=round(avg, 4), price=price,
             market_value=round(mv, 2), cost_basis=round(p["cost"], 2), pnl=round(pnl, 2),
-            pnl_pct=(pnl / p["cost"] if p["cost"] else None), weight=0.0,
+            pnl_pct=(pnl / p["cost"] * 100 if p["cost"] else None), weight=0.0,
         ))
     equity = cash + invested
     for pos in positions:
@@ -133,7 +133,7 @@ def get_account() -> PaperAccountOut:
         id=acct_id, name=name, cash=round(cash, 2), starting_cash=starting, base_currency=ccy,
         positions=positions, invested=round(invested, 2), equity=round(equity, 2),
         total_pnl=round(total_pnl, 2),
-        total_return_pct=(total_pnl / starting if starting else None),
+        total_return_pct=(total_pnl / starting * 100 if starting else None),
         trades=[TradeOut(
             id=t.id, symbol=t.symbol, side=t.side, quantity=t.quantity, price=t.price,
             note=t.note, created_at=t.created_at,

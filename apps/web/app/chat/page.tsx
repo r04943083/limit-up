@@ -33,7 +33,10 @@ export default function ChatPage() {
       .finally(() => setBusy(false));
   };
 
-  const clear = () => { clearChat().then(() => setTurns([])).catch(() => {}); };
+  const clear = () => {
+    if (turns.length === 0 || !confirm("清空所有对话记录?此操作不可撤销。")) return;
+    clearChat().then(() => setTurns([])).catch(() => {});
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -71,7 +74,7 @@ export default function ChatPage() {
         {busy && (
           <div className="flex justify-start">
             <div className="max-w-2xl rounded-2xl px-4 py-2.5 text-sm bg-panel border border-line text-ink-faint">
-              思考中…(claude -p,约 10–40 秒)
+              思考中…(AI 生成,约 10–40 秒)
             </div>
           </div>
         )}

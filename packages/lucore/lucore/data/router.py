@@ -6,8 +6,9 @@ and transparently caches daily OHLCV in SQLite.
 from __future__ import annotations
 
 import datetime as dt
+from zoneinfo import ZoneInfo
 
-from ..markets import Market, infer_market
+from ..markets import MARKET_TZ, Market, infer_market
 from . import cache
 from .base import (
     Bar,
@@ -60,10 +61,16 @@ class DataRouter:
     def get_ohlcv(
         self, symbol: str, period: str = "1y", interval: str = "1d", refresh: bool = True
     ) -> list[Bar]:
-        """Return cached bars, refreshing from the live adapter when stale/empty."""
+        """Return cached bars, refreshing from the live adapter when stale/empty.
+
+        Staleness is measured against the symbol's *market-local* calendar date, so a
+        user in Asia viewing US stocks doesn't trip a needless refetch after local midnight.
+        """
         cache.ensure_stock(symbol)
         latest = cache.latest_cached_date(symbol, interval)
-        stale = latest is None or (dt.date.today() - latest).days >= 1
+        market = infer_market(symbol)
+        market_today = dt.datetime.now(ZoneInfo(MARKET_TZ[market])).date()
+        stale = latest is None or (market_today - latest).days >= 1
         if refresh and stale:
             live = self._for(infer_market(symbol)).get_ohlcv(symbol, period=period, interval=interval)
             if live:

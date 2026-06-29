@@ -141,10 +141,13 @@ export default function PortfolioPage() {
       <Panel title="新增 / 导入持仓" hint="CSV 列:symbol, quantity, avg_cost">
         <div className="flex flex-wrap gap-2">
           <input value={sym} onChange={(e) => setSym(e.target.value)} placeholder="代码"
+            onKeyDown={(e) => { if (e.key === "Enter" && !busy) add(); }}
             className="w-32 bg-base border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/60" />
           <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="数量"
+            onKeyDown={(e) => { if (e.key === "Enter" && !busy) add(); }}
             className="w-24 bg-base border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/60" />
           <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="成本价"
+            onKeyDown={(e) => { if (e.key === "Enter" && !busy) add(); }}
             className="w-28 bg-base border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/60" />
           <button onClick={add} disabled={busy}
             className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 hover:bg-accent/25 disabled:opacity-50">加入</button>
@@ -210,7 +213,7 @@ export default function PortfolioPage() {
         </>
       )}
 
-      <Panel title="AI 组合点评" hint="claude -p">
+      <Panel title="AI 组合点评" hint="AI 生成">
         <button onClick={doReview} disabled={reviewing || !a}
           className="w-full mb-3 rounded-lg bg-accent/15 text-accent text-sm font-medium py-2 hover:bg-accent/25 disabled:opacity-50">
           {reviewing ? "点评中…(约 30–60 秒)" : review ? "重新点评" : "AI 点评组合"}

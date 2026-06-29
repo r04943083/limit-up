@@ -103,7 +103,7 @@ export default function LimitUpPage() {
       {err && <div className="rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
 
       {/* AI 复盘 */}
-      <Panel title="AI 复盘解读" hint={review ? review.provider : "claude -p"}>
+      <Panel title="AI 复盘解读" hint={review ? review.provider : "AI 生成"}>
         <button onClick={doReview} disabled={reviewing || loading || !pool?.count}
           className="w-full rounded-lg bg-accent/15 text-accent text-sm font-medium py-2 hover:bg-accent/25 disabled:opacity-50">
           {reviewing ? "复盘中…(约 20–40 秒)" : review ? "重新复盘" : "AI 复盘解读"}

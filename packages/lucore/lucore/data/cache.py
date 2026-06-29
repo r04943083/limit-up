@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from ..db import session_scope
 from ..db.models import PriceBar, Stock
@@ -51,26 +52,25 @@ def latest_cached_date(symbol: str, interval: str = "1d") -> dt.date | None:
 
 
 def write_bars(symbol: str, interval: str, bars: list[Bar]) -> int:
-    """Insert bars, skipping dates already present (idempotent upsert by symbol+interval+date)."""
+    """Insert bars idempotently (symbol+interval+date). Lets SQLite skip duplicates via
+    ON CONFLICT DO NOTHING — no full-table date scan, scales to long histories."""
     if not bars:
         return 0
+    # Deduplicate within the incoming batch (same date appearing twice would still
+    # conflict against the first inserted row in this statement).
+    seen: dict[dt.date, Bar] = {}
+    for b in bars:
+        seen[b.date] = b
+    payload = [
+        {
+            "symbol": symbol, "interval": interval, "date": b.date,
+            "open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume,
+        }
+        for b in seen.values()
+    ]
     with session_scope() as s:
-        existing = set(
-            s.execute(
-                select(PriceBar.date).where(
-                    PriceBar.symbol == symbol, PriceBar.interval == interval
-                )
-            ).scalars().all()
+        stmt = sqlite_insert(PriceBar).values(payload).on_conflict_do_nothing(
+            index_elements=["symbol", "interval", "date"]
         )
-        n = 0
-        for b in bars:
-            if b.date in existing:
-                continue
-            s.add(
-                PriceBar(
-                    symbol=symbol, interval=interval, date=b.date,
-                    open=b.open, high=b.high, low=b.low, close=b.close, volume=b.volume,
-                )
-            )
-            n += 1
-        return n
+        result = s.execute(stmt)
+        return result.rowcount or 0

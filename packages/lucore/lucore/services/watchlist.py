@@ -74,14 +74,23 @@ def _sorted_items(wl: Watchlist) -> list[WatchlistItem]:
     return sorted(wl.items, key=lambda it: (it.sort_order or 0, it.id))
 
 
+def _load_stocks(s, symbols) -> dict[str, Stock]:
+    """Batch-load Stock rows for a set of symbols in one query (avoids N+1 s.get)."""
+    syms = list({sym for sym in symbols})
+    if not syms:
+        return {}
+    return {st.symbol: st for st in s.execute(select(Stock).where(Stock.symbol.in_(syms))).scalars()}
+
+
 def list_watchlists() -> list[WatchlistOut]:
     with session_scope() as s:
         wls = s.execute(
             select(Watchlist).order_by(Watchlist.sort_order, Watchlist.id)
         ).scalars().all()
+        stocks = _load_stocks(s, (it.symbol for wl in wls for it in wl.items))
         out = []
         for wl in wls:
-            items = [_item_out(it, s.get(Stock, it.symbol)) for it in _sorted_items(wl)]
+            items = [_item_out(it, stocks.get(it.symbol)) for it in _sorted_items(wl)]
             out.append(WatchlistOut(
                 id=wl.id, name=wl.name, description=wl.description,
                 sort_order=wl.sort_order or 0, items=items,
@@ -94,7 +103,8 @@ def get_watchlist(watchlist_id: int) -> WatchlistOut | None:
         wl = s.get(Watchlist, watchlist_id)
         if wl is None:
             return None
-        items = [_item_out(it, s.get(Stock, it.symbol)) for it in _sorted_items(wl)]
+        stocks = _load_stocks(s, (it.symbol for it in wl.items))
+        items = [_item_out(it, stocks.get(it.symbol)) for it in _sorted_items(wl)]
         return WatchlistOut(
             id=wl.id, name=wl.name, description=wl.description,
             sort_order=wl.sort_order or 0, items=items,
@@ -257,16 +267,22 @@ def quotes_for(watchlist_id: int) -> list[QuoteRow]:
         wl = s.get(Watchlist, watchlist_id)
         if wl is None:
             return []
+        items = _sorted_items(wl)
+        syms = [it.symbol for it in items]
+        stocks = _load_stocks(s, syms)
+        snaps = {
+            sn.symbol: sn for sn in s.execute(select(Snapshot).where(Snapshot.symbol.in_(syms))).scalars()
+        } if syms else {}
         rows: list[QuoteRow] = []
-        for it in _sorted_items(wl):
-            stock = s.get(Stock, it.symbol)
+        for it in items:
+            stock = stocks.get(it.symbol)
             market = stock.market if stock else infer_market(it.symbol).value
             name = stock.name if stock else None
             row = QuoteRow(
                 item_id=it.id, symbol=it.symbol, market=market, name=name, tags=it.tags,
                 sort_order=it.sort_order or 0,
             )
-            snap = s.get(Snapshot, it.symbol)
+            snap = snaps.get(it.symbol)
             if snap and snap.bundle_json:
                 try:
                     b = ResearchBundle.model_validate_json(snap.bundle_json)

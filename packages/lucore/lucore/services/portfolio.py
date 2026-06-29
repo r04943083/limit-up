@@ -24,6 +24,7 @@ from ..db.models import Analysis, Holding, Portfolio, Stock
 from ..llm.base import LLMProvider, get_provider, with_chinese
 from ..markets import MARKET_CURRENCY, infer_market
 from . import usage
+from .research import get_research
 
 # CSV header aliases (covers Futu / IBKR / generic exports).
 _SYM = {"symbol", "ticker", "code", "代码", "证券代码", "stock"}
@@ -66,9 +67,15 @@ def list_holdings(portfolio_id: int) -> list[HoldingOut]:
         rows = s.execute(
             select(Holding).where(Holding.portfolio_id == portfolio_id).order_by(Holding.symbol)
         ).scalars().all()
+        # Batch-load stocks in one query (avoid N+1 s.get per holding).
+        stocks = {
+            st.symbol: st for st in s.execute(
+                select(Stock).where(Stock.symbol.in_([h.symbol for h in rows]))
+            ).scalars()
+        } if rows else {}
         out = []
         for h in rows:
-            stock = s.get(Stock, h.symbol)
+            stock = stocks.get(h.symbol)
             out.append(
                 HoldingOut(
                     id=h.id, symbol=h.symbol, market=stock.market if stock else infer_market(h.symbol).value,
@@ -139,6 +146,10 @@ def import_csv(portfolio_id: int, csv_text: str) -> int:
 
 
 def get_analytics(portfolio_id: int, base_currency: str = "USD") -> PortfolioAnalytics:
+    """Cache-first analytics. Reads price/sector/currency from the stored snapshot and
+    bars from the local cache (no live network on the hot path). Holdings are pre-synced
+    by ``sync_all`` (daily scheduler / "全部更新"); a never-synced symbol is built once
+    via the cached-first research read and then served from the DB thereafter."""
     router = get_router()
     holdings = list_holdings(portfolio_id)
     inputs: list[PositionInput] = []
@@ -147,15 +158,26 @@ def get_analytics(portfolio_id: int, base_currency: str = "USD") -> PortfolioAna
 
     for h in holdings:
         market = infer_market(h.symbol)
-        f = router.get_fundamentals(h.symbol)
-        bars = router.get_ohlcv(h.symbol, period="6mo")
-        price = bars[-1].close if bars else None
-        currency = f.currency or MARKET_CURRENCY.get(market, "USD")
+        price: float | None = None
+        sector: str | None = None
+        name = h.name
+        currency = MARKET_CURRENCY.get(market, "USD")
+        try:
+            rb = get_research(h.symbol, cached=True)  # snapshot if synced (instant)
+            price = rb.quote.price
+            currency = rb.quote.currency or rb.fundamentals.currency or currency
+            sector = rb.fundamentals.sector
+            name = rb.fundamentals.name or h.name
+        except Exception:  # noqa: BLE001 - one bad symbol shouldn't break the whole portfolio
+            pass
         currencies.add(currency)
+        bars = router.get_ohlcv(h.symbol, period="6mo", refresh=False)  # cache-only
+        if price is None and bars:
+            price = bars[-1].close
         inputs.append(
             PositionInput(
                 symbol=h.symbol, market=market.value, quantity=h.quantity, avg_cost=h.avg_cost,
-                price=price, currency=currency, sector=f.sector, name=f.name or h.name,
+                price=price, currency=currency, sector=sector, name=name,
             )
         )
         if len(bars) >= 2:

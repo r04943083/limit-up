@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
 import { getPaper, paperTrade, resetPaper, type PaperAccount } from "@/lib/api";
-import { dirClass, num, pct, sinceLabel } from "@/lib/format";
+import { dirClass, num, pct, signedPct, sinceLabel } from "@/lib/format";
 
 export default function PaperPage() {
   const [acct, setAcct] = useState<PaperAccount | null>(null);
@@ -54,7 +54,7 @@ export default function PaperPage() {
           <Panel title="现金"><p className="text-2xl font-semibold tnum">{num(acct.cash)}</p>
             <p className="text-xs text-ink-faint mt-1">已投入 {num(acct.invested)}</p></Panel>
           <Panel title="总盈亏"><p className={`text-2xl font-semibold tnum ${dirClass(acct.total_pnl)}`}>{num(acct.total_pnl)}</p>
-            <p className={`text-xs mt-1 tnum ${dirClass(acct.total_return_pct)}`}>{pct(acct.total_return_pct)}</p></Panel>
+            <p className={`text-xs mt-1 tnum ${dirClass(acct.total_return_pct)}`}>{signedPct(acct.total_return_pct)}</p></Panel>
           <Panel title="持仓数"><p className="text-2xl font-semibold tnum">{acct.positions.length}</p>
             <p className="text-xs text-ink-faint mt-1">交易 {acct.trades.length} 笔</p></Panel>
         </div>
@@ -108,7 +108,7 @@ export default function PaperPage() {
                     <td className="text-right tnum">{num(p.price)}</td>
                     <td className="text-right tnum">{num(p.market_value)}</td>
                     <td className={`text-right tnum ${dirClass(p.pnl)}`}>{num(p.pnl)}</td>
-                    <td className={`text-right tnum ${dirClass(p.pnl_pct)}`}>{pct(p.pnl_pct)}</td>
+                    <td className={`text-right tnum ${dirClass(p.pnl_pct)}`}>{signedPct(p.pnl_pct)}</td>
                     <td className="text-right tnum text-ink-dim">{pct(p.weight)}</td>
                   </tr>
                 ))}

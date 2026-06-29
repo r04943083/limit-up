@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Briefing */}
-        <Panel title="AI 每日简报" hint={b ? b.provider : "claude -p"} className="lg:col-span-2">
+        <Panel title="AI 每日简报" hint={b ? b.provider : "AI 生成"} className="lg:col-span-2">
           {r ? (
             <div className="space-y-4">
               <p className="text-base text-ink font-medium leading-relaxed">{r.headline}</p>

@@ -46,6 +46,7 @@ export default function JournalPage() {
   };
 
   const remove = (id: number) => {
+    if (!confirm("删除这条日志?此操作不可撤销。")) return;
     deleteJournal(id).then(() => setEntries((prev) => prev.filter((e) => e.id !== id))).catch((e) => setErr(String(e)));
   };
 

@@ -14,7 +14,10 @@ export function compact(v: number | null | undefined): string {
   return `${sign}${abs.toFixed(0)}`;
 }
 
-// yfinance margins/growth/yield come as fractions (0.74 -> 74%).
+// Backend numeric contract (keep producers consistent with these):
+//   pct()       — input is a FRACTION (0.74 -> "74.0%"). Use for: weights, margins, yields.
+//   signedPct() — input is ALREADY A PERCENT (5.23 -> "+5.23%"). Use for: change_pct,
+//                 pnl_pct, total_pnl_pct, total_return_pct, index/limit-up moves.
 export function pct(v: number | null | undefined, digits = 1): string {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   return `${(v * 100).toFixed(digits)}%`;
