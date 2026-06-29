@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Chart from "@/components/Chart";
 import IntradayChart from "@/components/IntradayChart";
+import ValuationPanel from "@/components/ValuationPanel";
 import { Stat, RecBadge, ScoreMeter } from "@/components/ui";
 import {
   getResearch, getTechnical, getOhlcv, getIntraday, getAnalysis, runAnalyze,
@@ -21,7 +22,8 @@ const TIMEFRAMES = [
   { label: "月K", kind: "kline", period: "max", interval: "1mo" },
 ] as const;
 
-type Tab = "解读" | "报价估值" | "新闻舆情";
+// Futu's right-panel forms (报价 / 分析 / 资讯 / 评论) + LU's AI 解读.
+type Tab = "报价" | "分析" | "资讯" | "评论" | "解读";
 
 // The Futu-style three-column terminal body (center chart + right tab panel) for one symbol.
 // The left WatchlistPane is rendered by the page so it can drive symbol selection.
@@ -39,7 +41,7 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
   const [newsAna, setNewsAna] = useState<SavedNewsAnalysis | null>(null);
   const [analyzingNews, setAnalyzingNews] = useState(false);
   const [kidx, setKidx] = useState(2);  // default to 日K
-  const [tab, setTab] = useState<Tab>("解读");
+  const [tab, setTab] = useState<Tab>("报价");
   const [chartLoading, setChartLoading] = useState(false);
 
   const tf = TIMEFRAMES[kidx];
@@ -100,13 +102,14 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
 
   const f = rb?.fundamentals;
   const q = rb?.quote;
-  const upside = f?.target_mean && q?.price ? ((f.target_mean - q.price) / q.price) * 100 : null;
   // Today's O/H/L/Vol from the latest daily bar (loaded independently of the chart timeframe).
   const last = daily && daily.length ? daily[daily.length - 1] : null;
   const prev = daily && daily.length > 1 ? daily[daily.length - 2] : null;
   // 换手率 = 成交量 / 流通股本.
   const turnover = last?.volume && f?.float_shares ? (last.volume / f.float_shares) * 100 : null;
   const amount = last?.volume && q?.price ? last.volume * q.price : null;  // 成交额
+  const avgPrice = amount && last?.volume ? amount / last.volume : null;   // 均价 = 成交额 / 成交量
+  const floatValue = q?.price && f?.float_shares ? q.price * f.float_shares : null;  // 流通值
   const amplitude = last?.high != null && last?.low != null && prev?.close
     ? ((last.high - last.low) / prev.close) * 100 : null;  // 振幅
 
@@ -159,8 +162,8 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
         </div>
       </div>
 
-      {/* Right: header + tabbed panel */}
-      <div className="w-[340px] shrink-0 border-l border-line flex flex-col overflow-hidden">
+      {/* Right: Futu-style forms (报价 / 分析 / 资讯 / 评论) + LU AI 解读 */}
+      <div className="w-[360px] shrink-0 border-l border-line flex flex-col overflow-hidden">
         {/* Futu-style quote header */}
         <div className="px-4 pt-3 pb-2 border-b border-line">
           <div className="text-base font-semibold text-ink truncate" title={f?.name ?? q?.name ?? sym}>
@@ -181,126 +184,71 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
         </div>
 
         <div className="flex items-center border-b border-line h-10 px-2">
-          {(["解读", "报价估值", "新闻舆情"] as Tab[]).map((t) => (
+          {(["报价", "分析", "资讯", "评论", "解读"] as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-3 py-1.5 text-sm rounded transition-colors ${t === tab ? "text-accent" : "text-ink-dim hover:text-ink"}`}>
+              className={`px-2.5 py-1.5 text-sm rounded transition-colors ${t === tab ? "text-accent font-medium" : "text-ink-dim hover:text-ink"}`}>
               {t}
             </button>
           ))}
         </div>
 
         <div className="flex-1 overflow-auto p-4 space-y-4">
-          {tab === "解读" && (
+          {/* 报价 — fu2.png: dense quote table + 盘口/资金/异动 (Level-2 数据缺口诚实占位) */}
+          {tab === "报价" && (
             <>
-              <button onClick={analyze} disabled={analyzing}
-                className="w-full rounded-lg bg-accent/15 text-accent text-sm font-medium py-2 hover:bg-accent/25 disabled:opacity-50">
-                {analyzing ? "分析中… (~30–60s)" : analysis ? "重新分析" : "AI 解读"}
-              </button>
-              {analysis ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <RecBadge rec={analysis.result.recommendation} tone={recTone(analysis.result.recommendation)} />
-                    {analysis.result.target_price != null && (
-                      <span className="text-xs text-ink-dim tnum">目标 {num(analysis.result.target_price)} · {analysis.result.time_horizon}</span>
-                    )}
-                  </div>
-                  <ScoreMeter score={analysis.result.score} />
-                  <p className="text-sm text-ink-dim leading-relaxed">{analysis.result.summary}</p>
-                  {analysis.result.bull_case && <p className="text-xs text-ink-dim"><span className="text-up font-medium">多头 · </span>{analysis.result.bull_case}</p>}
-                  {analysis.result.bear_case && <p className="text-xs text-ink-dim"><span className="text-down font-medium">空头 · </span>{analysis.result.bear_case}</p>}
-                  {analysis.result.risks.length > 0 && (
-                    <div>
-                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">风险</div>
-                      <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{analysis.result.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
-                    </div>
-                  )}
-                  {analysis.result.catalysts.length > 0 && (
-                    <div>
-                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">催化剂</div>
-                      <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{analysis.result.catalysts.map((c, i) => <li key={i}>{c}</li>)}</ul>
-                    </div>
-                  )}
-                  <p className="text-[11px] text-ink-faint pt-1">AI 观点 · 非投资建议 · {analysis.provider}</p>
-                </div>
-              ) : (
-                <p className="text-sm text-ink-faint">运行 AI 大脑,得到有依据的论点、评分、风险与催化剂(中文)。</p>
-              )}
-            </>
-          )}
-
-          {tab === "报价估值" && (
-            <>
-              {/* Dense quote grid (Futu 报价-style), from the latest daily bar + quote */}
               <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">报价</div>
-                <div className="grid grid-cols-2 gap-x-4">
-                  <Stat label="最新价" value={num(q?.price)} tone={(q?.change_pct ?? 0) >= 0 ? "up" : "down"} />
-                  <Stat label="涨跌幅" value={signedPct(q?.change_pct)} tone={(q?.change_pct ?? 0) >= 0 ? "up" : "down"} />
-                  <Stat label="今开" value={num(last?.open)} />
-                  <Stat label="昨收" value={num(prev?.close)} />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                   <Stat label="最高" value={num(last?.high)} />
+                  <Stat label="开盘" value={num(last?.open)} />
                   <Stat label="最低" value={num(last?.low)} />
-                  <Stat label="成交量" value={compact(last?.volume ?? null)} />
-                  <Stat label="成交额" value={compact(amount)} />
+                  <Stat label="昨收" value={num(prev?.close)} />
+                  <Stat label="均价" value={num(avgPrice)} />
+                  <Stat label="市盈率TTM" value={num(f?.pe_ttm)} />
                   <Stat label="振幅" value={amplitude != null ? `${amplitude.toFixed(2)}%` : "—"} />
-                  <Stat label="均量(日)" value={compact(f?.avg_volume)} />
+                  <Stat label="市盈率(动)" value={num(f?.pe_fwd)} />
                   <Stat label="换手率" value={turnover != null ? `${turnover.toFixed(2)}%` : "—"} />
-                  <Stat label="总股本" value={compact(f?.shares_outstanding)} />
-                  <Stat label="流通股" value={compact(f?.float_shares)} />
-                  <Stat label="52周高" value={num(f?.week52_high)} />
-                  <Stat label="52周低" value={num(f?.week52_low)} />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">估值</div>
-                <div className="grid grid-cols-2 gap-x-4">
+                  <Stat label="市净率" value={num(f?.pb)} />
+                  <Stat label="成交量" value={compact(last?.volume ?? null)} />
+                  <Stat label="市销率" value={num(f?.ps)} />
+                  <Stat label="成交额" value={compact(amount)} />
                   <Stat label="市值" value={compact(f?.market_cap)} />
-                  <Stat label="P/E (TTM)" value={num(f?.pe_ttm)} />
-                  <Stat label="P/E (Fwd)" value={num(f?.pe_fwd)} />
-                  <Stat label="P/B" value={num(f?.pb)} />
-                  <Stat label="P/S" value={num(f?.ps)} />
-                  <Stat label="PEG" value={num(f?.peg)} />
-                  <Stat label="EV/EBITDA" value={num(f?.ev_ebitda)} />
-                  <Stat label="股息率" value={pct(f?.dividend_yield)} />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">盈利能力</div>
-                <div className="grid grid-cols-2 gap-x-4">
-                  <Stat label="毛利率" value={pct(f?.gross_margin)} />
-                  <Stat label="营业利润率" value={pct(f?.operating_margin)} />
-                  <Stat label="净利率" value={pct(f?.net_margin)} />
-                  <Stat label="ROE" value={pct(f?.roe)} />
-                  <Stat label="ROA" value={pct(f?.roa)} />
-                  <Stat label="营收增速" value={pct(f?.revenue_growth)} />
-                  <Stat label="EPS" value={num(f?.eps)} />
+                  <Stat label="52周最高" value={num(f?.week52_high)} />
+                  <Stat label="总股本" value={compact(f?.shares_outstanding)} />
+                  <Stat label="52周最低" value={num(f?.week52_low)} />
+                  <Stat label="流通股" value={compact(f?.float_shares)} />
+                  <Stat label="股息率TTM" value={pct(f?.dividend_yield)} />
+                  <Stat label="流通值" value={compact(floatValue)} />
                   <Stat label="Beta" value={num(f?.beta)} />
+                  <Stat label="均量(日)" value={compact(f?.avg_volume)} />
                 </div>
               </div>
 
+              {/* 盘口 / 资金 / 异动 — these need Level-2 (free sources can't supply) */}
               <div className="rounded-lg border border-line bg-panel/40 p-3">
-                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-2">分析师评级</div>
-                {f?.recommendation ? (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <RecBadge rec={f.recommendation.replace(/_/g, " ")} tone={recTone(f.recommendation)} />
-                      <span className="text-xs text-ink-dim tnum">{f.num_analysts ?? "—"} 位分析师</span>
-                    </div>
-                    <AnalystGauge mean={f.recommendation_mean} />
-                    <div className="mt-2">
-                      <Stat label="目标价(均值)" value={num(f.target_mean)} />
-                      <Stat label="上行空间" value={signedPct(upside)} tone={upside != null && upside >= 0 ? "up" : "down"} />
-                      <Stat label="目标区间" value={`${num(f.target_low)} – ${num(f.target_high)}`} />
-                    </div>
-                  </>
-                ) : <p className="text-sm text-ink-faint">暂无分析师覆盖。</p>}
+                <div className="flex items-center gap-3 mb-2 text-[11px]">
+                  {["盘口逐笔", "资金流向", "异动"].map((t) => (
+                    <span key={t} className="text-ink-dim">{t}</span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 mb-2">
+                  <div className="h-2 rounded-l-full bg-up/60" style={{ width: "50%" }} />
+                  <div className="h-2 rounded-r-full bg-down/60" style={{ width: "50%" }} />
+                </div>
+                <div className="flex justify-between text-[11px] text-ink-faint mb-2">
+                  <span>买盘 —%</span><span>卖盘 —%</span>
+                </div>
+                <p className="text-[11px] text-ink-faint leading-relaxed">
+                  买卖五档 / 盘口逐笔(Level-2)、主力 / 超大单资金流、实时异动需专业行情源,免费数据源(yfinance / akshare)不提供,暂以占位显示。
+                </p>
               </div>
             </>
           )}
 
-          {tab === "新闻舆情" && (
+          {/* 分析 — fu.png: 公司估值 (PE/PB/PS 估值带 + 行业平均 + 超过历史) + 分析师评级 + 卖空 */}
+          {tab === "分析" && <ValuationPanel symbol={sym} />}
+
+          {/* 资讯 — fu3.png: 个股新闻流 + AI 舆情 */}
+          {tab === "资讯" && (
             <>
               <div className="rounded-lg border border-line bg-panel/40 p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -338,40 +286,69 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
                   </div>
                 )}
               </div>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {rb?.news.map((n, i) => (
-                  <li key={i} className="text-sm border-b border-line/40 pb-2 last:border-0">
-                    <a href={n.url ?? "#"} target="_blank" rel="noreferrer" className="text-ink hover:text-accent">{n.title}</a>
-                    <div className="text-ink-faint text-[11px] mt-0.5">{n.publisher ?? ""}{n.published_at ? ` · ${sinceLabel(n.published_at)}` : ""}</div>
+                  <li key={i} className="text-sm border-b border-line/40 pb-2.5 last:border-0">
+                    <a href={n.url ?? "#"} target="_blank" rel="noreferrer" className="text-ink hover:text-accent leading-snug block">{n.title}</a>
+                    <div className="text-ink-faint text-[11px] mt-1">{n.publisher ?? ""}{n.published_at ? ` · ${sinceLabel(n.published_at)}` : ""}</div>
                   </li>
                 ))}
                 {rb && rb.news.length === 0 && <li className="text-sm text-ink-faint">暂无近期新闻。</li>}
               </ul>
             </>
           )}
+
+          {/* 评论 — fu4.png: 社区贴文(需富途社区数据源,暂未接入) */}
+          {tab === "评论" && (
+            <div className="rounded-lg border border-line bg-panel/40 p-4 text-center space-y-2">
+              <div className="text-sm text-ink-dim">社区评论</div>
+              <p className="text-[12px] text-ink-faint leading-relaxed">
+                富途牛牛圈 / 社区贴文需富途社区数据源,暂未接入。
+                可先到「资讯」看新闻舆情,或用「解读」获取 AI 多空观点。
+              </p>
+            </div>
+          )}
+
+          {/* 解读 — LU AI 大脑(富途没有,LU 原生增益) */}
+          {tab === "解读" && (
+            <>
+              <button onClick={analyze} disabled={analyzing}
+                className="w-full rounded-lg bg-accent/15 text-accent text-sm font-medium py-2 hover:bg-accent/25 disabled:opacity-50">
+                {analyzing ? "分析中… (~30–60s)" : analysis ? "重新分析" : "AI 解读"}
+              </button>
+              {analysis ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <RecBadge rec={analysis.result.recommendation} tone={recTone(analysis.result.recommendation)} />
+                    {analysis.result.target_price != null && (
+                      <span className="text-xs text-ink-dim tnum">目标 {num(analysis.result.target_price)} · {analysis.result.time_horizon}</span>
+                    )}
+                  </div>
+                  <ScoreMeter score={analysis.result.score} />
+                  <p className="text-sm text-ink-dim leading-relaxed">{analysis.result.summary}</p>
+                  {analysis.result.bull_case && <p className="text-xs text-ink-dim"><span className="text-up font-medium">多头 · </span>{analysis.result.bull_case}</p>}
+                  {analysis.result.bear_case && <p className="text-xs text-ink-dim"><span className="text-down font-medium">空头 · </span>{analysis.result.bear_case}</p>}
+                  {analysis.result.risks.length > 0 && (
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">风险</div>
+                      <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{analysis.result.risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                    </div>
+                  )}
+                  {analysis.result.catalysts.length > 0 && (
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">催化剂</div>
+                      <ul className="list-disc list-inside text-xs text-ink-dim space-y-0.5">{analysis.result.catalysts.map((c, i) => <li key={i}>{c}</li>)}</ul>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-ink-faint pt-1">AI 观点 · 非投资建议 · {analysis.provider}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-ink-faint">运行 AI 大脑,得到有依据的论点、评分、风险与催化剂(中文)。</p>
+              )}
+            </>
+          )}
         </div>
       </div>
     </>
-  );
-}
-
-// Futu-style consensus gauge from yfinance recommendationMean (1=Strong Buy … 5=Sell).
-function AnalystGauge({ mean }: { mean: number | null }) {
-  if (mean == null) return null;
-  const m = Math.max(1, Math.min(5, mean));
-  const posPct = ((m - 1) / 4) * 100; // 0% = strong buy (left), 100% = sell (right)
-  const label = m <= 1.5 ? "强力买入" : m <= 2.5 ? "买入" : m <= 3.5 ? "持有" : m <= 4.5 ? "减持" : "卖出";
-  const tone = m <= 2.5 ? "text-up" : m >= 3.5 ? "text-down" : "text-warn";
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className={`text-sm font-medium ${tone}`}>{label}</span>
-        <span className="text-[11px] text-ink-faint tnum">评级 {m.toFixed(2)} / 5</span>
-      </div>
-      <div className="relative h-1.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg,#F6465D,#E0A33E,#2EBD85)" }}>
-        <span className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-white ring-1 ring-black/40" style={{ left: `${posPct}%` }} />
-      </div>
-      <div className="flex justify-between text-[10px] text-ink-faint mt-0.5"><span>买入</span><span>持有</span><span>卖出</span></div>
-    </div>
   );
 }

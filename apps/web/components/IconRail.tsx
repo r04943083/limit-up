@@ -27,6 +27,7 @@ const NAV: Item[] = [
   { label: "复盘", href: "/replay", match: "/replay", icon: I("M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z|M10 9l5 3-5 3Z") },
   { label: "日志", href: "/journal", match: "/journal", icon: I("M6 4h12v16H7a1 1 0 0 1-1-1V4Z|M9 8h6|M9 12h6") },
   { label: "AI室", href: "/studio", match: "/studio", icon: I("M12 3 2 9l10 6 10-6-10-6Z|M2 15l10 6 10-6") },
+  { label: "数据", href: "/data", match: "/data", icon: I("M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z|M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6|M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6") },
   { label: "AI用量", href: "/usage", match: "/usage", icon: I("M4 20V10|M10 20V4|M16 20v-7|M22 20H2") },
 ];
 

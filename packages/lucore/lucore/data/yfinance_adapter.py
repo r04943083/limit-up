@@ -187,6 +187,36 @@ class YFinanceAdapter(MarketDataAdapter):
             target_low=_f(g("targetLowPrice")), target_median=_f(g("targetMedianPrice")),
         )
 
+    def get_recommendation_summary(self, symbol: str) -> dict[str, int] | None:
+        """Latest analyst rating distribution (strongBuy/buy/hold/sell/strongSell counts).
+
+        Powers the Futu-style 买入/持有/卖出 bars. yfinance's ``recommendations`` is a small
+        DataFrame, newest period first; we take the most recent row. Returns None if absent."""
+        t = self._ticker(symbol)
+        try:
+            df = t.recommendations
+        except Exception:
+            return None
+        if df is None or getattr(df, "empty", True):
+            return None
+        try:
+            row = df.iloc[0]
+        except Exception:
+            return None
+
+        def _gi(key: str) -> int:
+            try:
+                v = row.get(key)
+                return int(v) if v is not None and v == v else 0
+            except (TypeError, ValueError):
+                return 0
+
+        out = {
+            "strong_buy": _gi("strongBuy"), "buy": _gi("buy"), "hold": _gi("hold"),
+            "sell": _gi("sell"), "strong_sell": _gi("strongSell"),
+        }
+        return out if sum(out.values()) > 0 else None
+
     def get_financials(self, symbol: str) -> Financials:
         market = infer_market(symbol)
         t = self._ticker(symbol)

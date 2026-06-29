@@ -46,6 +46,11 @@ class DataRouter:
     def get_news(self, symbol: str, limit: int = 10) -> list[NewsItem]:
         return self._for(infer_market(symbol)).get_news(symbol, limit=limit)
 
+    def get_recommendation_summary(self, symbol: str) -> dict[str, int] | None:
+        adapter = self._for(infer_market(symbol))
+        fn = getattr(adapter, "get_recommendation_summary", None)
+        return fn(symbol) if fn else None
+
     def get_financials(self, symbol: str) -> Financials:
         try:
             return self._for(infer_market(symbol)).get_financials(symbol)

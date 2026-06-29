@@ -3,9 +3,16 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from lucore.services.inventory import Inventory, get_inventory
 from lucore.services.sync import FreshnessRow, SyncResult, freshness, sync_all
 
 router = APIRouter(prefix="/sync", tags=["sync"])
+
+
+@router.get("/inventory", response_model=Inventory)
+def inventory() -> Inventory:
+    """How much data we hold locally, per market (美股/A股/港股) — drives the 「数据」 page."""
+    return get_inventory()
 
 
 @router.post("/all", response_model=SyncResult)

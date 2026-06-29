@@ -110,17 +110,46 @@ export type ResearchBundle = {
 export const getResearch = (s: string, cached = true) =>
   get<ResearchBundle>(`/stocks/${s}/research?cached=${cached}`);
 
+// ---- Symbol search (autocomplete over the downloaded universe) ----
+export type SymbolHit = { symbol: string; name: string | null; market: string | null };
+export const searchSymbols = (q: string, limit = 20) =>
+  get<SymbolHit[]>(`/stocks/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+
 // ---- Data sync (pull live → DB so pages load fast) ----
 export type SyncResult = {
   requested: number;
   synced: number;
   failed: string[];
   synced_at: string;
+  financials_synced?: number;
+  profiles_synced?: number;
+  feeds?: Record<string, boolean>;
 };
 export const syncSymbol = (s: string) => post<SyncResult>(`/stocks/${s}/sync`);
 export const syncAll = () => post<SyncResult>(`/sync/all`);
 export type FreshnessRow = { symbol: string; synced_at: string | null };
 export const getFreshness = () => get<FreshnessRow[]>(`/sync/freshness`);
+
+// ---- Data inventory (how much we've downloaded, per market) ----
+export type MarketInventory = {
+  market: string;
+  label: string;
+  stocks: number;
+  with_bars: number;
+  with_snapshot: number;
+  with_financials: number;
+  with_profile: number;
+  bars: number;
+};
+export type Inventory = {
+  markets: MarketInventory[];
+  total_stocks: number;
+  total_bars: number;
+  total_snapshots: number;
+  db_bytes: number | null;
+  last_synced_at: string | null;
+};
+export const getInventory = () => get<Inventory>(`/sync/inventory`);
 
 export type Technical = {
   dates: string[];
@@ -209,7 +238,13 @@ export type AnalystConsensus = {
   target_low: number | null;
   target_median: number | null;
   upside_pct: number | null;
+  strong_buy: number | null;
+  buy: number | null;
+  hold: number | null;
+  sell: number | null;
+  strong_sell: number | null;
 };
+export type IndustryAvg = { pe: number | null; pb: number | null; ps: number | null; peers: number };
 export type ValuationOut = {
   symbol: string;
   currency: string | null;
@@ -217,6 +252,9 @@ export type ValuationOut = {
   pb: ValuationBand;
   ps: ValuationBand;
   analyst: AnalystConsensus;
+  industry: string | null;
+  industry_avg: IndustryAvg;
+  short_percent: number | null;
 };
 export const getValuation = (s: string) => get<ValuationOut>(`/stocks/${s}/valuation`);
 

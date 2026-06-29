@@ -12,10 +12,17 @@ from lucore.services.intraday import IntradayPoint, get_intraday
 from lucore.services.profile import get_profile_cached
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
+from lucore.services.search import SymbolHit, search_symbols
 from lucore.services.sync import SyncResult, sync_symbol
 from lucore.services.valuation import ValuationOut, get_valuation
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
+
+
+@router.get("/search", response_model=list[SymbolHit])
+def search(q: str = "", limit: int = 20) -> list[SymbolHit]:
+    """Autocomplete the global search box: match downloaded symbols by ticker + name."""
+    return search_symbols(q, limit=limit)
 
 
 @router.get("/{symbol}/quote", response_model=Quote)
@@ -46,7 +53,10 @@ def sync_one(symbol: str) -> SyncResult:
 
 @router.get("/{symbol}/ohlcv", response_model=list[Bar])
 def ohlcv(symbol: str, period: str = "1y", interval: str = "1d") -> list[Bar]:
-    bars = get_router().get_ohlcv(symbol.upper(), period=period, interval=interval)
+    try:
+        bars = get_router().get_ohlcv(symbol.upper(), period=period, interval=interval)
+    except Exception as e:  # noqa: BLE001 - unknown ticker → 404, not a 500 spew
+        raise HTTPException(status_code=404, detail=f"no price data: {e}") from e
     if not bars:
         raise HTTPException(status_code=404, detail="no price data")
     return bars
@@ -60,7 +70,10 @@ def intraday(symbol: str, range: str = "1d") -> list[IntradayPoint]:
 
 @router.get("/{symbol}/technical", response_model=TechnicalAnalysis)
 def technical(symbol: str, period: str = "1y", interval: str = "1d") -> TechnicalAnalysis:
-    ta = get_technical(symbol.upper(), period=period, interval=interval)
+    try:
+        ta = get_technical(symbol.upper(), period=period, interval=interval)
+    except Exception as e:  # noqa: BLE001 - unknown ticker → 404, not a 500 spew
+        raise HTTPException(status_code=404, detail=f"no price data: {e}") from e
     if not ta.dates:
         raise HTTPException(status_code=404, detail="no price data")
     return ta

@@ -22,6 +22,11 @@ class SyncResult(BaseModel):
     synced: int
     failed: list[str] = []
     synced_at: dt.datetime
+    # Extra detail filled by the deep "一键更新" (sync_all). Optional so single-symbol
+    # /sync responses stay valid without them.
+    financials_synced: int = 0
+    profiles_synced: int = 0
+    feeds: dict[str, bool] = {}  # global market feeds refreshed: indices / limit_up / ...
 
 
 def tracked_symbols() -> list[str]:
@@ -85,9 +90,77 @@ def sync_symbols(symbols: list[str], workers: int = _SYNC_WORKERS, warm: bool = 
     )
 
 
-def sync_all() -> SyncResult:
-    """Refresh every tracked symbol (watchlist + portfolio)."""
-    return sync_symbols(tracked_symbols())
+def _refresh_fundamentals(symbol: str) -> tuple[bool, bool]:
+    """Fill the *slow-moving* per-stock caches (financials + profile) for a tracked symbol.
+
+    These are normally lazy-loaded only when the user opens 财报/概况 — which is why most
+    stocks show empty there. The deep 一键更新 pre-warms them for the user's own stocks so
+    those pages are instant. Cache-first: `get_*_cached` skips symbols that are still fresh,
+    so re-runs are cheap. Returns (financials_ok, profile_ok)."""
+    from .financials import get_financials_cached
+    from .profile import get_profile_cached
+
+    fin_ok = prof_ok = False
+    try:
+        get_financials_cached(symbol)
+        fin_ok = True
+    except Exception:  # noqa: BLE001 - one stock's missing statements shouldn't fail the run
+        pass
+    try:
+        get_profile_cached(symbol)
+        prof_ok = True
+    except Exception:  # noqa: BLE001
+        pass
+    return fin_ok, prof_ok
+
+
+def _refresh_global_feeds() -> dict[str, bool]:
+    """Refresh the market-wide feeds (small in number, high value) — indices + the A-share
+    limit-up pool / dragon-tiger / HSGT for today. Each is isolated so one source being down
+    doesn't sink the others."""
+    feeds: dict[str, bool] = {}
+
+    def _try(name: str, fn) -> None:  # noqa: ANN001
+        try:
+            fn()
+            feeds[name] = True
+        except Exception:  # noqa: BLE001
+            feeds[name] = False
+
+    from .cn_market import get_dragon_tiger, get_hsgt_summary, get_limit_up_pool
+    from .markets_svc import get_indices
+
+    _try("indices", lambda: get_indices(force=True))
+    _try("limit_up", lambda: get_limit_up_pool())
+    _try("dragon_tiger", lambda: get_dragon_tiger())
+    _try("hsgt", lambda: get_hsgt_summary())
+    return feeds
+
+
+def sync_all(deep: bool = True) -> SyncResult:
+    """One-click refresh of everything that's cheap to keep current:
+
+    1. A research snapshot (quote + fundamentals + technical + news) for every tracked symbol.
+    2. (deep) financials + profile for those same symbols — fills the usually-empty 财报/概况.
+    3. Global market feeds: indices + A-share limit-up / dragon-tiger / HSGT.
+
+    Per-stock AI (analyses) and the daily briefing are *not* triggered here — they cost LLM
+    tokens and have their own buttons / 08:30 scheduler. Whole-universe (625) financials are
+    also skipped: too many. `deep=False` does only the snapshot pass (the old behavior)."""
+    symbols = tracked_symbols()
+    result = sync_symbols(symbols)
+
+    if deep and symbols:
+        fin_n = prof_n = 0
+        with ThreadPoolExecutor(max_workers=min(_SYNC_WORKERS, len(symbols))) as pool:
+            for fin_ok, prof_ok in pool.map(_refresh_fundamentals, symbols):
+                fin_n += int(fin_ok)
+                prof_n += int(prof_ok)
+        result.financials_synced = fin_n
+        result.profiles_synced = prof_n
+
+    result.feeds = _refresh_global_feeds()
+    return result
 
 
 class FreshnessRow(BaseModel):

@@ -48,3 +48,5 @@ npm-debug.log*
 apps/web/playwright-report/
 apps/web/test-results/
 apps/web/blob-report/
+.playwright-mcp/
+apps/web/.playwright-mcp/

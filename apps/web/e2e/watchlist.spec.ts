@@ -56,26 +56,57 @@ test("自选页:列排序 + 可定制副指标列 + 分时", async ({ page }) =>
   expectClean(w);
 });
 
-test("个股页:分析 Tab — 历史估值带 (PE/PB/PS) + 分析师评级", async ({ page }) => {
+test("自选右侧:报价/分析/资讯/评论 四形态 (对齐富途)", async ({ page }) => {
   const w = watch(page);
   await page.goto("/research/NVDA");
 
-  // The 分析 tab on the individual-stock page (Futu-style 估值 + 评级).
+  // 报价 (fu2): dense quote table is the default right-panel form.
+  await page.getByRole("button", { name: "报价", exact: true }).click();
+  await expect(page.getByText("市盈率TTM", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("换手率", { exact: true })).toBeVisible();
+
+  // 分析 (fu): 公司估值 PE/PB/PS band + 行业平均 + 分析师评级 + 卖空数据.
   await page.getByRole("button", { name: "分析", exact: true }).click();
-
-  // 历史估值带 panel with the PE/PB/PS metric switcher + stats row.
-  await expect(page.getByRole("heading", { name: "历史估值带" })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("历史平均", { exact: true })).toBeVisible();
-  await expect(page.getByText("历史分位", { exact: true })).toBeVisible();
-
+  await expect(page.getByRole("heading", { name: "公司估值" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("行业平均", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("超过历史数据", { exact: true })).toBeVisible();
   // Switch the valuation metric (must not crash / 5xx).
   await page.getByRole("button", { name: "市净率 PB", exact: true }).click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(200);
   await page.getByRole("button", { name: "市销率 PS", exact: true }).click();
-
-  // Analyst consensus panel.
   await expect(page.getByRole("heading", { name: "分析师评级" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "卖空数据" })).toBeVisible();
+
+  // 资讯 (fu3): news feed.
+  await page.getByRole("button", { name: "资讯", exact: true }).click();
+  await page.waitForTimeout(300);
+
+  // 评论 (fu4): community placeholder (honest about the data gap).
+  await page.getByRole("button", { name: "评论", exact: true }).click();
+  await expect(page.getByText("社区评论", { exact: true })).toBeVisible();
 
   await page.waitForTimeout(500);
+  expectClean(w);
+});
+
+test("全局搜索:代码/名称自动补全,只跳已下载标的", async ({ page }) => {
+  const w = watch(page);
+  await page.goto("/watchlist");
+
+  await page.keyboard.press("/"); // open the overlay
+  const overlay = page.locator("div.fixed.inset-0.z-50"); // scope to the search dialog
+  const box = overlay.getByPlaceholder(/搜索代码/);
+  await expect(box).toBeVisible();
+  await box.fill("tes");
+
+  // A dropdown of real matches appears; Tesla must be among them (scoped to the overlay
+  // so it doesn't collide with the TSLA row in the watchlist behind it).
+  const tslaHit = overlay.getByRole("button", { name: /TSLA/ });
+  await expect(tslaHit).toBeVisible({ timeout: 5000 });
+  await tslaHit.click();
+
+  // Navigates to the resolved symbol — never a made-up /research/TES.
+  await expect(page).toHaveURL(/\/research\/TSLA/);
+  await page.waitForTimeout(800);
   expectClean(w);
 });

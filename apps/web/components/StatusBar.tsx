@@ -30,7 +30,13 @@ export default function StatusBar() {
     setNote(null);
     try {
       const r = await syncAll();
-      setNote(`已更新 ${r.synced}/${r.requested}${r.failed.length ? ` · 失败 ${r.failed.length}` : ""}`);
+      const feeds = r.feeds ? Object.values(r.feeds).filter(Boolean).length : 0;
+      const total = r.feeds ? Object.keys(r.feeds).length : 0;
+      setNote(
+        `已更新 ${r.synced}/${r.requested}` +
+        (total ? ` · 行情 ${feeds}/${total}` : "") +
+        (r.failed.length ? ` · 失败 ${r.failed.length}` : ""),
+      );
       await Promise.all([loadIndices(), loadFreshness()]);
       // let any open page refresh its data now that the cache is fresh
       window.dispatchEvent(new Event("lu:synced"));
@@ -59,7 +65,7 @@ export default function StatusBar() {
         <button
           onClick={updateAll}
           disabled={busy}
-          title="拉取全部自选 + 持仓的最新数据到本地缓存"
+          title="拉取自选+持仓的快照/财报/概况,并刷新全局行情(指数/A股涨停/龙虎/沪深港通)"
           className="rounded px-2 py-0.5 text-accent hover:bg-accent/15 disabled:opacity-50 whitespace-nowrap"
         >
           {busy ? "更新中…" : "↻ 全部更新"}

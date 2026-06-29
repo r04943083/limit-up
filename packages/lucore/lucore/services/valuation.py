@@ -7,13 +7,53 @@ book-value-per-share). The LLM never touches these numbers — pure compute over
 """
 from __future__ import annotations
 
+import datetime as dt
+import json
+
 from pydantic import BaseModel
 
 from ..compute.valuation import PerSharePoint, ValuationBand, parse_period, ttm, valuation_band
 from ..data.base import Statement
 from ..data.cache import read_bars
+from ..data.router import get_router
+from ..db import session_scope
+from ..db.models import MarketDataCache
 from .financials import get_financials_cached
+from .peers import industry_average
 from .research import get_research
+
+# Analyst rating distribution shifts slowly; cache it a day so 分析 stays cache-first.
+_RECSUM_TTL_HOURS = 24
+
+
+def _recommendation_distribution(symbol: str) -> dict[str, int] | None:
+    """Cached strongBuy/buy/hold/sell/strongSell counts for the 分析 rating bars."""
+    key = f"recsum:{symbol.upper()}"
+    now = dt.datetime.now(dt.timezone.utc)
+    with session_scope() as s:
+        row = s.get(MarketDataCache, key)
+        if row is not None:
+            fetched = row.fetched_at if row.fetched_at.tzinfo else row.fetched_at.replace(tzinfo=dt.timezone.utc)
+            if (now - fetched).total_seconds() < _RECSUM_TTL_HOURS * 3600:
+                try:
+                    return json.loads(row.payload_json) or None
+                except ValueError:
+                    pass
+    try:
+        dist = get_router().get_recommendation_summary(symbol)
+    except Exception:  # noqa: BLE001 - missing/old yfinance shape shouldn't break 分析
+        dist = None
+    if dist is None:
+        return None
+    payload = json.dumps(dist)
+    with session_scope() as s:
+        row = s.get(MarketDataCache, key)
+        if row is None:
+            s.add(MarketDataCache(cache_key=key, payload_json=payload, fetched_at=now))
+        else:
+            row.payload_json = payload
+            row.fetched_at = now
+    return dist
 
 # Statement row labels (set in the yfinance adapter's _INCOME_ROWS / _BALANCE_ROWS).
 _EPS_LABEL = "摊薄EPS"
@@ -31,6 +71,19 @@ class AnalystConsensus(BaseModel):
     target_low: float | None = None
     target_median: float | None = None
     upside_pct: float | None = None           # (target_mean − price) / price × 100
+    # Rating distribution (Futu 买入/持有/卖出 bars). None when the source has no breakdown.
+    strong_buy: int | None = None
+    buy: int | None = None
+    hold: int | None = None
+    sell: int | None = None
+    strong_sell: int | None = None
+
+
+class IndustryAvg(BaseModel):
+    pe: float | None = None
+    pb: float | None = None
+    ps: float | None = None
+    peers: int = 0
 
 
 class ValuationOut(BaseModel):
@@ -40,6 +93,9 @@ class ValuationOut(BaseModel):
     pb: ValuationBand
     ps: ValuationBand
     analyst: AnalystConsensus
+    industry: str | None = None
+    industry_avg: IndustryAvg = IndustryAvg()
+    short_percent: float | None = None  # 空头占流通股比例 (卖空数据)
 
 
 def _row_oldest_first(stmt: Statement, label: str) -> tuple[list[str], list[float | None]]:
@@ -113,6 +169,7 @@ def get_valuation(symbol: str) -> ValuationOut:
     price = rb.quote.price
     tgt = fund.target_mean
     upside = ((tgt - price) / price * 100.0) if (tgt and price) else None
+    dist = _recommendation_distribution(sym)
     analyst = AnalystConsensus(
         recommendation=fund.recommendation,
         recommendation_mean=fund.recommendation_mean,
@@ -123,6 +180,16 @@ def get_valuation(symbol: str) -> ValuationOut:
         target_low=fund.target_low,
         target_median=fund.target_median,
         upside_pct=upside,
+        **(dist or {}),
     )
-    return ValuationOut(symbol=sym, currency=fin.currency or fund.currency,
-                        pe=pe, pb=pb, ps=ps, analyst=analyst)
+
+    ind = industry_average(sym)
+    industry_avg = IndustryAvg(pe=ind.pe, pb=ind.pb, ps=ind.ps, peers=ind.n) if ind else IndustryAvg()
+
+    return ValuationOut(
+        symbol=sym, currency=fin.currency or fund.currency,
+        pe=pe, pb=pb, ps=ps, analyst=analyst,
+        industry=ind.industry if ind else fund.industry,
+        industry_avg=industry_avg,
+        short_percent=fund.short_percent,
+    )

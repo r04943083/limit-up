@@ -55,13 +55,30 @@ def _fake_bars() -> list[Bar]:
     ]
 
 
+def _patch_extras(monkeypatch, dist=None, ind=None):
+    """Stub the DB/network-backed extras (rating distribution + industry average)."""
+    monkeypatch.setattr(vsvc, "_recommendation_distribution", lambda s: dist)
+    monkeypatch.setattr(vsvc, "industry_average", lambda s: ind)
+
+
 def test_get_valuation_builds_bands_and_consensus(monkeypatch):
     monkeypatch.setattr(vsvc, "get_research", lambda s: _fake_bundle())
     monkeypatch.setattr(vsvc, "get_financials_cached", lambda s: _fake_financials())
     monkeypatch.setattr(vsvc, "read_bars", lambda s, interval="1d": _fake_bars())
+    from lucore.services.peers import IndustryMedian
+    _patch_extras(
+        monkeypatch,
+        dist={"strong_buy": 6, "buy": 4, "hold": 2, "sell": 1, "strong_sell": 0},
+        ind=IndustryMedian(industry="Software", n=12, pe=20.0, pb=5.0, ps=4.0),
+    )
 
     v = vsvc.get_valuation("test")
     assert v.symbol == "TEST" and v.currency == "USD"
+
+    # New 分析 fields: rating distribution + industry average + short interest.
+    assert v.analyst.strong_buy == 6 and v.analyst.hold == 2
+    assert v.industry == "Software"
+    assert v.industry_avg.pe == 20.0 and v.industry_avg.peers == 12
 
     # PE: TTM EPS = 4.0 (4×1.0). closes 48,52 -> PE 12.0, 13.0. current overridden by fund.pe_ttm.
     assert [p.value for p in v.pe.points] == [12.0, 13.0]
@@ -84,6 +101,7 @@ def test_get_valuation_handles_missing_statements(monkeypatch):
     monkeypatch.setattr(vsvc, "get_research", lambda s: _fake_bundle())
     monkeypatch.setattr(vsvc, "get_financials_cached", lambda s: empty)
     monkeypatch.setattr(vsvc, "read_bars", lambda s, interval="1d": _fake_bars())
+    _patch_extras(monkeypatch)  # no distribution, no industry average
 
     v = vsvc.get_valuation("test")
     # No statements -> empty bands, but current ratios still surface from fundamentals.
