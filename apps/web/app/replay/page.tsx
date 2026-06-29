@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Panel from "@/components/Panel";
+import SymbolInput from "@/components/SymbolInput";
 import { Stat } from "@/components/ui";
 import { getOhlcv, type OhlcvBar } from "@/lib/api";
 import { dirClass, num, pct } from "@/lib/format";
@@ -99,10 +100,7 @@ export default function ReplayPage() {
 
       <Panel title="选择标的">
         <div className="flex gap-3">
-          <input value={symbol} onChange={(e) => setSymbol(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load(symbol)}
-            placeholder="代码 如 NVDA"
-            className="flex-1 rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
+          <SymbolInput value={symbol} onChange={setSymbol} onEnter={() => load(symbol)} className="flex-1" />
           <button onClick={() => load(symbol)} disabled={loading}
             className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-2 hover:bg-accent/25 disabled:opacity-40">
             {loading ? "加载中…" : "载入"}

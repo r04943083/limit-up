@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
+import SymbolInput from "@/components/SymbolInput";
 import MultiLineChart, { type Series } from "@/components/MultiLineChart";
 import {
   getPaper, paperTrade, resetPaper, getArena, arenaTick, resetArena,
@@ -271,10 +272,8 @@ function Manual() {
 
       <Panel title="下单" hint="按缓存价成交">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <input value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-            onKeyDown={(e) => { if (e.key === "Enter" && !busy) doTrade(); }}
-            placeholder="代码 如 NVDA"
-            className="rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
+          <SymbolInput value={form.symbol} onChange={(s) => setForm({ ...form, symbol: s })}
+            onEnter={() => { if (!busy) doTrade(); }} />
           <select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value as "buy" | "sell" })}
             className="rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent">
             <option value="buy">买入</option>

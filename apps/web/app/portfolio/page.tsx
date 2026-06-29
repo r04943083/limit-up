@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
+import SymbolInput from "@/components/SymbolInput";
 import { Stat, RecBadge, Chip } from "@/components/ui";
 import {
   getPortfolio, importPortfolioCsv, addHolding, removeHolding,
@@ -140,9 +141,9 @@ export default function PortfolioPage() {
 
       <Panel title="新增 / 导入持仓" hint="CSV 列:symbol, quantity, avg_cost">
         <div className="flex flex-wrap gap-2">
-          <input value={sym} onChange={(e) => setSym(e.target.value)} placeholder="代码"
-            onKeyDown={(e) => { if (e.key === "Enter" && !busy) add(); }}
-            className="w-32 bg-base border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/60" />
+          <SymbolInput value={sym} onChange={setSym} onEnter={() => { if (!busy) add(); }}
+            placeholder="代码" className="w-40"
+            inputClassName="w-full bg-base border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/60" />
           <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="数量"
             onKeyDown={(e) => { if (e.key === "Enter" && !busy) add(); }}
             className="w-24 bg-base border border-line rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent/60" />

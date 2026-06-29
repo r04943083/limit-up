@@ -24,6 +24,7 @@ from .routers import (
     paper,
     portfolio,
     recommendations,
+    screener,
     stocks,
     strategy,
     studio,
@@ -59,6 +60,7 @@ app.include_router(stocks.router)
 app.include_router(watchlists.router)
 app.include_router(portfolio.router)
 app.include_router(recommendations.router)
+app.include_router(screener.router)
 app.include_router(sync.router)
 app.include_router(usage.router)
 app.include_router(briefing.router)

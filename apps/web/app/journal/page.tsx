@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
+import SymbolInput from "@/components/SymbolInput";
 import { Chip, ScoreMeter } from "@/components/ui";
 import {
   addJournal, deleteJournal, getJournal, reviewJournal, type JournalEntry,
@@ -61,9 +62,8 @@ export default function JournalPage() {
 
       <Panel title="新增记录" hint="记录决策与理由">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-          <input value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-            placeholder="代码(选填)如 NVDA"
-            className="rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
+          <SymbolInput value={form.symbol} onChange={(s) => setForm({ ...form, symbol: s })}
+            placeholder="代码(选填)如 NVDA" />
           <select value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}
             className="rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent">
             {ACTION_KEYS.map((a) => <option key={a} value={a}>{ACTIONS[a]}</option>)}

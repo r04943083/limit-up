@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Panel from "@/components/Panel";
+import SymbolInput from "@/components/SymbolInput";
 import { Stat } from "@/components/ui";
 import {
   explainBacktest, getStrategyKinds, runBacktest,
@@ -79,8 +80,7 @@ export default function StrategyPage() {
 
       <Panel title="策略参数" hint="设置后回测">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="代码 如 NVDA"
-            className="rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
+          <SymbolInput value={symbol} onChange={setSymbol} />
           <select value={spec.kind} onChange={(e) => setSpec({ ...spec, kind: e.target.value })}
             className="rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent">
             {kinds.map((k) => <option key={k} value={k}>{KIND_LABEL[k] ?? k}</option>)}

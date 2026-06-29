@@ -22,10 +22,13 @@ export default function ApiStatus() {
   }, []);
 
   const ok = !!health && !err;
+  // A connectivity light is NOT market data — green=online / red=offline is the
+  // universal convention. (Don't reuse the app's red=up / green=down data palette
+  // here, or a healthy API shows a red dot.)
   return (
     <div className="flex items-center gap-2 text-xs">
       <span
-        className={`w-2 h-2 rounded-full ${ok ? "bg-up" : "bg-down"} ${ok ? "" : "animate-pulse"}`}
+        className={`w-2 h-2 rounded-full ${ok ? "bg-[#2EBD85]" : "bg-[#F6465D] animate-pulse"}`}
       />
       <span className="text-ink-dim">
         {ok ? (

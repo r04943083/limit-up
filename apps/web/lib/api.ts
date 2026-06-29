@@ -760,3 +760,38 @@ export type DnaResult = {
 export type SavedDna = { provider: string; created_at: string; facts: Record<string, unknown>; result: DnaResult };
 export const getDna = () => get<SavedDna | null>("/studio/dna");
 export const runDna = () => post<SavedDna>("/studio/dna");
+
+// --- Screener + universe seeding -------------------------------------------
+export type ScreenerField = { key: string; label: string; group: string; unit: string; better: string };
+export type IndexInfo = { key: string; label: string; market: string };
+export type ScreenerMeta = { fields: ScreenerField[]; indices: IndexInfo[] };
+export const getScreenerMeta = () => get<ScreenerMeta>("/screener/meta");
+
+export type ScreenFilter = { field: string; min?: number | null; max?: number | null };
+export type ScreenSpec = {
+  filters?: ScreenFilter[];
+  markets?: string[];
+  sectors?: string[];
+  limit_up_only?: boolean;
+  sort_field?: string;
+  sort_desc?: boolean;
+  limit?: number;
+};
+export type ScreenHit = {
+  symbol: string; name: string | null; market: string | null;
+  sector: string | null; industry: string | null;
+  metrics: Record<string, number | null>;
+};
+export type ScreenResult = { universe: number; matched: number; results: ScreenHit[]; sectors: string[] };
+export const runScreen = (spec: ScreenSpec) => post<ScreenResult>("/screener/run", spec);
+
+export type SeedProgress = {
+  running: boolean; done: number; total: number; failed: number;
+  started_at: string | null; finished_at: string | null;
+};
+export type IndexSeed = { key: string; label: string; market: string; fetched: number };
+export type SeedResult = { indices: IndexSeed[]; total_fetched: number; added: number; universe_size: number };
+export type SeedResponse = { seed: SeedResult; progress: SeedProgress };
+export const seedUniverse = (keys: string[], fill = true) =>
+  post<SeedResponse>("/screener/universe/seed", { keys, fill });
+export const getSeedProgress = () => get<SeedProgress>("/screener/universe/progress");

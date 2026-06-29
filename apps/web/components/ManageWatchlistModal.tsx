@@ -8,6 +8,7 @@ import {
   type Watchlist, type QuoteRow, type EbkImportResult,
 } from "@/lib/api";
 import { num, signedPct, dirClass } from "@/lib/format";
+import SymbolInput from "./SymbolInput";
 
 function reorderBy<T>(arr: T[], idOf: (x: T) => number, fromId: number, toId: number): T[] {
   if (fromId === toId) return arr;
@@ -227,9 +228,9 @@ export default function ManageWatchlistModal({
           {/* Items column */}
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="flex items-center gap-2 px-4 h-11 border-b border-line">
-              <input value={symbol} onChange={(e) => setSymbol(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()}
-                placeholder="加入标的 · NVDA · 0700.HK · 600519.SS"
-                className="flex-1 max-w-xs bg-base border border-line rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent/60" />
+              <SymbolInput value={symbol} onChange={setSymbol} onEnter={add}
+                placeholder="加入标的 · NVDA · 0700.HK · 600519.SS" className="flex-1 max-w-xs"
+                inputClassName="w-full bg-base border border-line rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent/60" />
               <button onClick={add} disabled={busy || gid == null} className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-1.5 hover:bg-accent/25 disabled:opacity-50">加入</button>
               <span className="text-xs text-ink-faint ml-auto">{rows.length} 标的 · 拖 ⠿ 排序 / 拖到左侧分组移动</span>
             </div>

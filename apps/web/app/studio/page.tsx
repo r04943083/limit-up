@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
+import SymbolInput from "@/components/SymbolInput";
 import { Chip, RecBadge, ScoreMeter, Stat } from "@/components/ui";
 import {
   analyzeAsPersona, getCoach, getDebate, getDna, getPanel, getPersonas,
@@ -54,9 +55,7 @@ function SymbolBar({ symbol, setSymbol, onRun, busy, label }: {
 }) {
   return (
     <div className="flex gap-2">
-      <input value={symbol} onChange={(e) => setSymbol(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onRun()} placeholder="代码 如 NVDA"
-        className="flex-1 rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
+      <SymbolInput value={symbol} onChange={setSymbol} onEnter={onRun} className="flex-1" />
       <button onClick={onRun} disabled={busy || !symbol.trim()}
         className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-2 hover:bg-accent/25 disabled:opacity-40">
         {busy ? "生成中…(约 30–90 秒)" : label}
@@ -173,8 +172,7 @@ function PersonaTab() {
   return (
     <div className="space-y-4">
       <Panel title="投资人格" hint="选一位投资大师的视角分析个股">
-        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="代码 如 NVDA"
-          className="w-full rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
+        <SymbolInput value={symbol} onChange={setSymbol} />
       </Panel>
       {err && <div className="rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
