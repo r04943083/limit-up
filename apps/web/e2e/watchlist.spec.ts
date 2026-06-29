@@ -55,3 +55,27 @@ test("自选页:列排序 + 可定制副指标列 + 分时", async ({ page }) =>
 
   expectClean(w);
 });
+
+test("个股页:分析 Tab — 历史估值带 (PE/PB/PS) + 分析师评级", async ({ page }) => {
+  const w = watch(page);
+  await page.goto("/research/NVDA");
+
+  // The 分析 tab on the individual-stock page (Futu-style 估值 + 评级).
+  await page.getByRole("button", { name: "分析", exact: true }).click();
+
+  // 历史估值带 panel with the PE/PB/PS metric switcher + stats row.
+  await expect(page.getByRole("heading", { name: "历史估值带" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("历史平均", { exact: true })).toBeVisible();
+  await expect(page.getByText("历史分位", { exact: true })).toBeVisible();
+
+  // Switch the valuation metric (must not crash / 5xx).
+  await page.getByRole("button", { name: "市净率 PB", exact: true }).click();
+  await page.waitForTimeout(300);
+  await page.getByRole("button", { name: "市销率 PS", exact: true }).click();
+
+  // Analyst consensus panel.
+  await expect(page.getByRole("heading", { name: "分析师评级" })).toBeVisible();
+
+  await page.waitForTimeout(500);
+  expectClean(w);
+});

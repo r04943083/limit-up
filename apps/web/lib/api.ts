@@ -187,6 +187,39 @@ export const getDcf = (s: string, p: DcfParams = {}) => {
   return get<DcfView>(`/stocks/${s}/dcf${qs ? `?${qs}` : ""}`);
 };
 
+// ---- Valuation bands (历史估值带) + analyst consensus ----
+export type RatioPoint = { date: string; value: number };
+export type ValuationBand = {
+  metric: string;
+  points: RatioPoint[];
+  current: number | null;
+  mean: number | null;
+  median: number | null;
+  low: number | null;
+  high: number | null;
+  percentile: number | null;
+};
+export type AnalystConsensus = {
+  recommendation: string | null;
+  recommendation_mean: number | null;
+  num_analysts: number | null;
+  price: number | null;
+  target_mean: number | null;
+  target_high: number | null;
+  target_low: number | null;
+  target_median: number | null;
+  upside_pct: number | null;
+};
+export type ValuationOut = {
+  symbol: string;
+  currency: string | null;
+  pe: ValuationBand;
+  pb: ValuationBand;
+  ps: ValuationBand;
+  analyst: AnalystConsensus;
+};
+export const getValuation = (s: string) => get<ValuationOut>(`/stocks/${s}/valuation`);
+
 // ---- Company profile: overview + dividends + ownership ----
 export type Dividend = { ex_date: string; amount: number };
 export type HolderRow = {

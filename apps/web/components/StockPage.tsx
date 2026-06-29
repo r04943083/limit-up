@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Terminal from "@/components/Terminal";
 import DeepResearch from "@/components/DeepResearch";
+import ValuationPanel from "@/components/ValuationPanel";
 import Panel from "@/components/Panel";
 import { Stat } from "@/components/ui";
 import { getProfile, getResearch, syncSymbol, type CompanyProfile, type ResearchBundle } from "@/lib/api";
 import { compact, num, pct, signedPct, dirClass } from "@/lib/format";
 
-const TABS = ["行情", "财报", "分红", "股东", "概况"] as const;
+const TABS = ["行情", "分析", "财报", "分红", "股东", "概况"] as const;
 type Tab = (typeof TABS)[number];
 
 /**
@@ -103,6 +104,11 @@ export default function StockPage({ symbol }: { symbol: string | null }) {
 
       <div className="flex-1 min-h-0 flex">
         {tab === "行情" && <Terminal symbol={symbol} reloadKey={reloadKey} />}
+        {tab === "分析" && (
+          <div className="flex-1 min-w-0 overflow-auto p-5">
+            <ValuationPanel symbol={symbol} />
+          </div>
+        )}
         {tab === "财报" && <DeepResearch symbol={symbol} />}
         {needsProfile && (
           <div className="flex-1 min-w-0 overflow-auto p-5 space-y-5">

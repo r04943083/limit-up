@@ -18,7 +18,6 @@ const I = (d: string) => (
 const NAV: Item[] = [
   { label: "机会", href: "/", match: "__home__", icon: I("M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z|M12 8v4l3 2") },
   { label: "自选", href: "/watchlist", match: "/watchlist", icon: I("M11 3 4 9v12h14V9l-7-6Z") },
-  { label: "研究", href: "/research/NVDA", match: "/research", icon: I("M4 19V5|M4 15l5-5 4 4 7-7") },
   { label: "对话", href: "/chat", match: "/chat", icon: I("M4 5h16v11H9l-5 4V5Z") },
   { label: "推荐", href: "/recommendations", match: "/recommendations", icon: I("m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8 6.8 19l1-5.8L3.5 9.2l5.9-.9L12 3Z") },
   { label: "涨停", href: "/limitup", match: "/limitup", icon: I("M12 19V5|M5 12l7-7 7 7") },

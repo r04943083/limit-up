@@ -13,6 +13,7 @@ from lucore.services.profile import get_profile_cached
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
 from lucore.services.sync import SyncResult, sync_symbol
+from lucore.services.valuation import ValuationOut, get_valuation
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -75,6 +76,13 @@ def financials(symbol: str) -> Financials:
 def profile(symbol: str) -> CompanyProfile:
     """Company overview + dividend history + ownership, cache-first (~weekly refresh)."""
     return get_profile_cached(symbol.upper())
+
+
+@router.get("/{symbol}/valuation", response_model=ValuationOut)
+def valuation(symbol: str) -> ValuationOut:
+    """Futu-style 历史估值带 (PE/PB/PS bands + 平均/分位) + analyst consensus.
+    Rebuilt deterministically from cached daily closes ÷ reported quarterly per-share figures."""
+    return get_valuation(symbol.upper())
 
 
 @router.get("/{symbol}/dcf", response_model=DcfView)
