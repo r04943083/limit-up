@@ -47,7 +47,12 @@ function Arena() {
   const [data, setData] = useState<ArenaOut | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (k: string) => setOpen((prev) => {
+    const next = new Set(prev);
+    next.has(k) ? next.delete(k) : next.add(k);
+    return next;
+  });
 
   const load = useCallback(() => { getArena().then(setData).catch((e) => setMsg(String(e))); }, []);
   useEffect(() => {
@@ -141,12 +146,12 @@ function Arena() {
             <tbody>
               {(data?.agents ?? []).map((a, i) => (
                 <Row key={a.persona} a={a} color={AGENT_COLORS[i % AGENT_COLORS.length]}
-                  open={open === a.persona} onToggle={() => setOpen(open === a.persona ? null : a.persona)} />
+                  open={open.has(a.persona)} onToggle={() => toggle(a.persona)} />
               ))}
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-ink-faint mt-3">AI 自动操盘 · 仅为模拟与娱乐,非投资建议。数字由 LU 计算,AI 只决定买卖。</p>
+        <p className="text-[11px] text-ink-faint mt-3">点任意一行展开持仓与完整操作记录(可同时展开多位)· 数字由 LU 计算,AI 只决定买卖 · 仅为模拟,非投资建议。</p>
       </Panel>
     </>
   );
@@ -186,33 +191,74 @@ function Row({ a, color, open, onToggle }: { a: ArenaAgent; color: string; open:
               <Kv k="操盘次数" v={`${a.trades_count} 笔`} />
             </div>
             {a.positions.length === 0 ? (
-              <p className="text-xs text-ink-faint">本轮空仓 / 尚未建仓。</p>
+              <p className="text-xs text-ink-faint mb-3">本轮空仓 / 尚未建仓。</p>
             ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-ink-faint border-b border-line/60">
-                    <th className="text-left font-normal py-1.5">代码</th>
-                    <th className="text-right font-normal">权重</th>
-                    <th className="text-right font-normal">现价</th>
-                    <th className="text-right font-normal">盈亏</th>
-                    <th className="text-left font-normal pl-4">AI 决策理由</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {a.positions.map((p) => (
-                    <tr key={p.symbol} className="border-b border-line/40 last:border-0 align-top">
-                      <td className="py-1.5">
-                        <Link href={`/research/${encodeURIComponent(p.symbol)}`} className="text-accent">{p.symbol}</Link>
-                        {p.name ? <span className="text-ink-faint ml-1.5">{p.name}</span> : null}
-                      </td>
-                      <td className="text-right tnum text-ink-dim">{pct(p.weight)}</td>
-                      <td className="text-right tnum text-ink-dim">{num(p.price)}</td>
-                      <td className={`text-right tnum ${dirClass(p.pnl_pct)}`}>{signedPct(p.pnl_pct)}</td>
-                      <td className="pl-4 text-ink-dim max-w-md">{p.last_reason ?? "—"}</td>
+              <>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">当前持仓</div>
+                <table className="w-full text-xs mb-4">
+                  <thead>
+                    <tr className="text-ink-faint border-b border-line/60">
+                      <th className="text-left font-normal py-1.5">代码</th>
+                      <th className="text-right font-normal">数量</th>
+                      <th className="text-right font-normal">买入价</th>
+                      <th className="text-right font-normal">现价</th>
+                      <th className="text-right font-normal">权重</th>
+                      <th className="text-right font-normal">盈亏</th>
+                      <th className="text-left font-normal pl-4">AI 决策理由</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {a.positions.map((p) => (
+                      <tr key={p.symbol} className="border-b border-line/40 last:border-0 align-top">
+                        <td className="py-1.5">
+                          <Link href={`/research/${encodeURIComponent(p.symbol)}`} className="text-accent">{p.symbol}</Link>
+                          {p.name ? <span className="text-ink-faint ml-1.5">{p.name}</span> : null}
+                        </td>
+                        <td className="text-right tnum text-ink-dim">{num(p.quantity, 2)}</td>
+                        <td className="text-right tnum text-ink-dim">{num(p.avg_cost)}</td>
+                        <td className="text-right tnum text-ink-dim">{num(p.price)}</td>
+                        <td className="text-right tnum text-ink-dim">{pct(p.weight)}</td>
+                        <td className={`text-right tnum ${dirClass(p.pnl_pct)}`}>{signedPct(p.pnl_pct)}</td>
+                        <td className="pl-4 text-ink-dim max-w-md">{p.last_reason ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+            {a.trades.length > 0 && (
+              <>
+                <div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">操作记录 · {a.trades.length} 笔</div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-ink-faint border-b border-line/60">
+                      <th className="text-left font-normal py-1.5">时间</th>
+                      <th className="text-left font-normal">操作</th>
+                      <th className="text-left font-normal">代码</th>
+                      <th className="text-right font-normal">价格</th>
+                      <th className="text-right font-normal">数量</th>
+                      <th className="text-right font-normal">金额</th>
+                      <th className="text-left font-normal pl-4">理由</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {a.trades.map((t, ti) => (
+                      <tr key={ti} className="border-b border-line/40 last:border-0 align-top">
+                        <td className="py-1.5 text-ink-faint whitespace-nowrap">{t.at ? sinceLabel(t.at) : "—"}</td>
+                        <td className={t.side === "buy" ? "text-up" : "text-down"}>{t.side === "buy" ? "买入" : "卖出"}</td>
+                        <td>
+                          <Link href={`/research/${encodeURIComponent(t.symbol)}`} className="text-accent">{t.symbol}</Link>
+                          {t.name ? <span className="text-ink-faint ml-1.5">{t.name}</span> : null}
+                        </td>
+                        <td className="text-right tnum text-ink-dim">{num(t.price)}</td>
+                        <td className="text-right tnum text-ink-dim">{num(t.quantity, 2)}</td>
+                        <td className="text-right tnum text-ink-dim">{num(t.amount, 0)}</td>
+                        <td className="pl-4 text-ink-dim max-w-md">{t.reason ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             )}
           </td>
         </tr>

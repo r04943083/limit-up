@@ -7,7 +7,7 @@ import SymbolInput from "@/components/SymbolInput";
 import { Stat, RecBadge, Chip } from "@/components/ui";
 import {
   getPortfolio, importPortfolioCsv, addHolding, removeHolding,
-  getAnalytics, getReview, runReview,
+  getAnalytics, getReview, runReview, // removeHolding powers the 删除 action
   type PortfolioAnalytics, type PortfolioReview,
 } from "@/lib/api";
 import { num, compact, signedPct } from "@/lib/format";
@@ -80,16 +80,26 @@ export default function PortfolioPage() {
   const [sym, setSym] = useState("");
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState("");
+  // symbol -> holding id, so the holdings table can edit / delete by row.
+  const [ids, setIds] = useState<Record<string, number>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const loadHoldings = useCallback((id: number) => {
+    getPortfolio().then((p) => {
+      setIds(Object.fromEntries(p.holdings.map((h) => [h.symbol, h.id])));
+    }).catch(() => {});
+  }, []);
 
   const loadAnalytics = useCallback((id: number) => {
     setA(null);
     getAnalytics(id).then(setA).catch((e) => setMsg(String(e)));
-  }, []);
+    loadHoldings(id);
+  }, [loadHoldings]);
 
   useEffect(() => {
     getPortfolio().then((p) => {
       setPid(p.id);
+      setIds(Object.fromEntries(p.holdings.map((h) => [h.symbol, h.id])));
       if (p.holdings.length) loadAnalytics(p.id);
       getReview(p.id).then(setReview).catch(() => {});
     });
@@ -101,6 +111,24 @@ export default function PortfolioPage() {
     try {
       await addHolding(pid, sym.trim().toUpperCase(), Number(qty) || 0, cost ? Number(cost) : undefined);
       setSym(""); setQty(""); setCost("");
+      loadAnalytics(pid);
+    } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+  };
+
+  // 编辑 = prefill the form (add() upserts by symbol, overwriting qty/cost).
+  const editRow = (symbol: string, quantity: number, avgCost: number | null) => {
+    setSym(symbol); setQty(String(quantity)); setCost(avgCost != null ? String(avgCost) : "");
+    setMsg(`正在编辑 ${symbol},改完点「加入」覆盖。`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const deleteRow = async (symbol: string) => {
+    const id = ids[symbol];
+    if (!pid || id == null) return;
+    if (!confirm(`从组合移除 ${symbol}?`)) return;
+    setBusy(true);
+    try {
+      await removeHolding(id);
       loadAnalytics(pid);
     } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
   };
@@ -185,6 +213,7 @@ export default function PortfolioPage() {
                   <th className="text-right font-medium">市值</th>
                   <th className="text-right font-medium">权重</th>
                   <th className="text-right font-medium">盈亏</th>
+                  <th className="text-right font-medium w-px">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +229,12 @@ export default function PortfolioPage() {
                     <td className="text-right tnum">{compact(p.market_value)}</td>
                     <td className="text-right tnum text-ink-dim">{(p.weight * 100).toFixed(1)}%</td>
                     <td className={`text-right tnum ${(p.pnl_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>{signedPct(p.pnl_pct)}</td>
+                    <td className="text-right whitespace-nowrap">
+                      <button onClick={() => editRow(p.symbol, p.quantity, p.avg_cost)} disabled={busy}
+                        className="text-xs text-ink-faint hover:text-accent disabled:opacity-50">编辑</button>
+                      <button onClick={() => deleteRow(p.symbol)} disabled={busy || ids[p.symbol] == null}
+                        className="text-xs text-ink-faint hover:text-down ml-3 disabled:opacity-50">删除</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

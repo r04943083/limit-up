@@ -669,11 +669,15 @@ export type ArenaPosition = {
   last_reason: string | null;
 };
 export type CurvePoint = { date: string; value: number };
+export type ArenaTrade = {
+  symbol: string; name: string | null; side: "buy" | "sell"; quantity: number;
+  price: number; amount: number; reason: string | null; at: string | null;
+};
 export type ArenaAgent = {
   persona: string; name: string; tagline: string; style: string;
   cash: number; invested: number; equity: number; starting_cash: number;
   metrics: PerfMetrics; positions: ArenaPosition[]; trades_count: number;
-  last_decision_at: string | null; rank: number; curve: CurvePoint[];
+  last_decision_at: string | null; rank: number; curve: CurvePoint[]; trades: ArenaTrade[];
 };
 export type ArenaBenchmark = { symbol: string; name: string; return_pct: number | null; curve: CurvePoint[] };
 export type ArenaOut = {

@@ -121,6 +121,36 @@ def test_rebalance_caps_position_and_holds_cash(db, monkeypatch):
     assert cash > 60000  # the rest is genuinely held as cash
 
 
+def test_get_arena_exposes_trade_ledger(db):
+    """The leaderboard surfaces each AI's full operation ledger (newest first) with
+    time / side / price / qty / reason so the user can audit every decision."""
+    from lucore.data import cache
+    from lucore.data.base import Bar
+    from lucore.db import session_scope
+    from lucore.db.models import PaperTrade
+    from lucore.services import arena
+
+    cache.ensure_stock("AAA")
+    cache.write_bars("AAA", "1d", [
+        Bar(date=dt.date(2024, 1, d), open=10, high=10, low=10, close=10 + d, volume=1)
+        for d in range(1, 6)
+    ])
+    aid = arena.ensure_arena(["buffett"])[0]
+    with session_scope() as s:
+        s.add(PaperTrade(account_id=aid, symbol="AAA", side="buy", quantity=100, price=11,
+                         note="便宜", created_at=dt.datetime(2024, 1, 1, 10, 0)))
+        s.add(PaperTrade(account_id=aid, symbol="AAA", side="sell", quantity=40, price=13,
+                         note="止盈", created_at=dt.datetime(2024, 1, 3, 10, 0)))
+
+    out = arena.get_arena(["buffett"])
+    agent = next(a for a in out.agents if a.persona == "buffett")
+    assert agent.trades_count == 2
+    assert len(agent.trades) == 2
+    assert agent.trades[0].side == "sell" and agent.trades[0].reason == "止盈"  # newest first
+    assert agent.trades[0].at == dt.datetime(2024, 1, 3, 10, 0)
+    assert agent.trades[1].side == "buy" and agent.trades[1].amount == pytest.approx(1100.0)
+
+
 def test_rebalance_empty_targets_goes_to_cash(db, monkeypatch):
     from lucore.services import arena
 

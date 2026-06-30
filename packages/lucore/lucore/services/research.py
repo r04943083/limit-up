@@ -61,14 +61,35 @@ def build_research_bundle(symbol: str, news_limit: int = 6) -> ResearchBundle:
     return bundle
 
 
+def _fundamentals_empty(f: Fundamentals) -> bool:
+    """A snapshot whose fundamentals are all-None — the tell-tale of a rate-limited fetch
+    (the price endpoint succeeds but `.info` gets throttled). We never let one of these
+    clobber a previously-good snapshot."""
+    return f.name is None and f.pe_ttm is None and f.roe is None and f.market_cap is None
+
+
 def save_snapshot(bundle: ResearchBundle) -> None:
-    """Persist the full research bundle for fast cached reads."""
+    """Persist the full research bundle for fast cached reads.
+
+    Anti-clobber guard: yfinance routinely rate-limits the fundamentals endpoint during
+    bulk syncs — the quote/bars come through but `.info` returns empty. Writing that as-is
+    would overwrite a perfectly good prior snapshot with empty fundamentals (the exact bug
+    that left MSFT et al. with blank PE/ROE/name). So when the incoming fundamentals are
+    empty but the stored ones are populated, we keep the *good* fundamentals and only
+    refresh the volatile parts (quote / technicals / news / spark)."""
     now = dt.datetime.now(dt.timezone.utc)
     with session_scope() as s:
         snap = s.get(Snapshot, bundle.symbol)
         if snap is None:
             snap = Snapshot(symbol=bundle.symbol)
             s.add(snap)
+        elif snap.bundle_json and _fundamentals_empty(bundle.fundamentals):
+            try:
+                prev = ResearchBundle.model_validate_json(snap.bundle_json)
+            except Exception:  # noqa: BLE001
+                prev = None
+            if prev is not None and not _fundamentals_empty(prev.fundamentals):
+                bundle = bundle.model_copy(update={"fundamentals": prev.fundamentals})
         snap.bundle_json = bundle.model_dump_json()
         snap.synced_at = now
 

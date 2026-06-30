@@ -378,6 +378,17 @@ class ArenaPosition(BaseModel):
     last_reason: str | None = None
 
 
+class ArenaTrade(BaseModel):
+    symbol: str
+    name: str | None = None
+    side: str            # buy | sell
+    quantity: float
+    price: float
+    amount: float        # signed cash flow magnitude = price * quantity
+    reason: str | None = None
+    at: dt.datetime | None = None
+
+
 class CurvePoint(BaseModel):
     date: str
     value: float  # return % from the account's start (so all lines share one axis)
@@ -398,6 +409,7 @@ class ArenaAgent(BaseModel):
     last_decision_at: dt.datetime | None = None
     rank: int = 0
     curve: list[CurvePoint] = []
+    trades: list[ArenaTrade] = []  # full operation ledger (newest first)
 
 
 class BenchmarkOut(BaseModel):
@@ -466,7 +478,7 @@ def get_arena(roster: list[str] | None = None) -> ArenaOut:
             if t.created_at and (last_at is None or t.created_at > last_at):
                 last_at = t.created_at
 
-        names = _name_lookup(set(held))
+        names = _name_lookup({t.symbol for t in trades} | set(held))
         positions: list[ArenaPosition] = []
         invested = 0.0
         for sym, p in held.items():
@@ -488,6 +500,15 @@ def get_arena(roster: list[str] | None = None) -> ArenaOut:
             pos.weight = pos.market_value / equity if equity else 0.0
         positions.sort(key=lambda x: x.market_value, reverse=True)
 
+        ledger = [
+            ArenaTrade(
+                symbol=t.symbol, name=names.get(t.symbol, (None, None))[0], side=t.side,
+                quantity=round(t.quantity, 4), price=t.price,
+                amount=round(t.price * t.quantity, 2), reason=t.note, at=t.created_at,
+            )
+            for t in sorted(trades, key=lambda x: (x.created_at or dt.datetime.min, x.id), reverse=True)
+        ]
+
         raw = equity_curve(aid, master)
         if raw:
             earliest = raw[0][0] if earliest is None else min(earliest, raw[0][0])
@@ -502,7 +523,7 @@ def get_arena(roster: list[str] | None = None) -> ArenaOut:
             persona=persona.key, name=acct.name, tagline=persona.tagline, style=persona.style,
             cash=round(cash, 2), invested=round(invested, 2), equity=round(equity, 2),
             starting_cash=starting, metrics=metrics, positions=positions,
-            trades_count=len(trades), last_decision_at=last_at, curve=curve,
+            trades_count=len(trades), last_decision_at=last_at, curve=curve, trades=ledger,
         ))
 
     agents.sort(key=lambda a: (a.metrics.total_return_pct if a.metrics.total_return_pct is not None else -1e9), reverse=True)
