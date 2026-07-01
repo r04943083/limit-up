@@ -55,6 +55,14 @@ _ADDED_COLUMNS: dict[str, dict[str, str]] = {
         "kind": "TEXT NOT NULL DEFAULT 'manual'",
         "persona": "TEXT",
     },
+    "snapshots": {
+        "name": "TEXT",
+        "market": "TEXT",
+        "sector": "TEXT",
+        "price": "FLOAT",
+        "change_pct": "FLOAT",
+        "market_cap": "FLOAT",
+    },
 }
 
 

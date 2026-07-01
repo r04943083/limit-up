@@ -30,6 +30,38 @@ async function del<T>(path: string): Promise<T> {
   return r.json();
 }
 
+// ---- Async AI jobs (submit → poll) ----
+// Long LLM calls are submitted as background jobs so the browser never holds a 60–180s
+// connection open. `runJob` posts to an /async endpoint, then polls /jobs/{id} until the
+// result (the original response payload) is ready — keeping the same return type as the
+// synchronous call, so call sites don't change.
+export type Job<T> = {
+  id: string;
+  kind: string;
+  status: "pending" | "running" | "done" | "error";
+  result: T | null;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+};
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function pollJob<T>(id: string, { intervalMs = 1500, timeoutMs = 300_000 } = {}): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const j = await get<Job<T>>(`/jobs/${id}`);
+    if (j.status === "done") return j.result as T;
+    if (j.status === "error") throw new Error(j.error || "AI 任务失败");
+    if (Date.now() > deadline) throw new Error("AI 任务超时");
+    await sleep(intervalMs);
+  }
+}
+
+async function runJob<T>(submitPath: string): Promise<T> {
+  const job = await post<Job<T>>(submitPath);
+  return pollJob<T>(job.id);
+}
+
 export type Health = {
   status: string;
   version: string;
@@ -176,9 +208,10 @@ export const getTechnical = (s: string, period = "1y", interval = "1d") =>
 export type OhlcvBar = { date: string; open: number; high: number; low: number; close: number; volume: number | null };
 export const getOhlcv = (s: string, period = "1y", interval = "1d") =>
   get<OhlcvBar[]>(`/stocks/${s}/ohlcv?period=${period}&interval=${interval}`);
-export type IntradayPoint = { t: string; price: number; volume: number | null };
-export const getIntraday = (s: string, range: "1d" | "5d" = "1d") =>
-  get<IntradayPoint[]>(`/stocks/${s}/intraday?range=${range}`);
+// session: pre | reg | post — US extended-hours vs regular-trading-hours.
+export type IntradayPoint = { t: string; price: number; volume: number | null; session: "pre" | "reg" | "post" };
+export const getIntraday = (s: string, range: "1d" | "5d" = "1d", prepost = true) =>
+  get<IntradayPoint[]>(`/stocks/${s}/intraday?range=${range}&prepost=${prepost}`);
 
 // ---- Deep research: financial statements + DCF ----
 export type StatementRow = { label: string; values: (number | null)[] };
@@ -295,7 +328,7 @@ export type SavedAnalysis = {
   result: AnalysisResult;
 };
 export const getAnalysis = (s: string) => get<SavedAnalysis | null>(`/stocks/${s}/analysis`);
-export const runAnalyze = (s: string) => post<SavedAnalysis>(`/stocks/${s}/analyze`);
+export const runAnalyze = (s: string) => runJob<SavedAnalysis>(`/stocks/${s}/analyze/async`);
 
 // ---- News sentiment ----
 export type NewsSentiment = {
@@ -744,7 +777,7 @@ export type CouncilResult = {
 };
 export type SavedCouncil = { symbol: string; provider: string; created_at: string; result: CouncilResult };
 export const getCouncil = (s: string) => get<SavedCouncil | null>(`/studio/council/${s}`);
-export const runCouncil = (s: string) => post<SavedCouncil>(`/studio/council/${s}`);
+export const runCouncil = (s: string) => runJob<SavedCouncil>(`/studio/council/${s}/async`);
 
 export type DebateResult = {
   bull_case: string; bear_case: string; bull_rebuttal: string; bear_rebuttal: string;
@@ -756,7 +789,7 @@ export const getDebate = (s: string) => get<SavedDebate | null>(`/studio/debate/
 // Optionally seat a persona on each side for a matchup debate (empty = generic seat).
 export const runDebate = (s: string, bull = "", bear = "") => {
   const q = [bull && `bull=${bull}`, bear && `bear=${bear}`].filter(Boolean).join("&");
-  return post<SavedDebate>(`/studio/debate/${s}${q ? `?${q}` : ""}`);
+  return runJob<SavedDebate>(`/studio/debate/${s}/async${q ? `?${q}` : ""}`);
 };
 
 export type AgentView = { agent: string; stance: string; score: number; rationale: string };
@@ -766,7 +799,7 @@ export type MultiAgentResult = {
 };
 export type SavedMultiAgent = { symbol: string; provider: string; created_at: string; result: MultiAgentResult };
 export const getPanel = (s: string) => get<SavedMultiAgent | null>(`/studio/panel/${s}`);
-export const runPanel = (s: string) => post<SavedMultiAgent>(`/studio/panel/${s}`);
+export const runPanel = (s: string) => runJob<SavedMultiAgent>(`/studio/panel/${s}/async`);
 
 export type CoachResult = {
   grade: string; discipline_score: number; headline: string;

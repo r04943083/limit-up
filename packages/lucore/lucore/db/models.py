@@ -148,6 +148,14 @@ class Snapshot(Base, TimestampMixin):
     symbol: Mapped[str] = mapped_column(String(32), primary_key=True)
     bundle_json: Mapped[str] = mapped_column(Text)  # serialized ResearchBundle
     synced_at: Mapped[dt.datetime] = mapped_column(default=lambda: dt.datetime.now(dt.timezone.utc))
+    # Denormalized fields for the market-overview page, so it never parses 1000s of JSON
+    # blobs on every load. Populated by save_snapshot; back-filled for legacy rows.
+    name: Mapped[str | None] = mapped_column(String(256))
+    market: Mapped[str | None] = mapped_column(String(4), index=True)
+    sector: Mapped[str | None] = mapped_column(String(64))
+    price: Mapped[float | None] = mapped_column(Float)
+    change_pct: Mapped[float | None] = mapped_column(Float)
+    market_cap: Mapped[float | None] = mapped_column(Float)
 
 
 class FinancialsCache(Base):

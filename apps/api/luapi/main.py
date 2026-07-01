@@ -20,6 +20,7 @@ from .routers import (
     chat,
     cn,
     journal,
+    jobs,
     markets,
     paper,
     portfolio,
@@ -72,6 +73,7 @@ app.include_router(arena.router)
 app.include_router(strategy.router)
 app.include_router(chat.router)
 app.include_router(studio.router)
+app.include_router(jobs.router)
 
 
 @app.get("/health")

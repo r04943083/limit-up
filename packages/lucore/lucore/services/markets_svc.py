@@ -4,6 +4,7 @@ Cached for a short TTL so the status bar is cheap to poll.
 """
 from __future__ import annotations
 
+import threading
 import time
 
 from pydantic import BaseModel
@@ -73,31 +74,82 @@ class OverviewRow(BaseModel):
     market_cap: float | None = None
 
 
-def get_overview() -> list[OverviewRow]:
-    """All synced symbols (from snapshots) with the fields needed for the 机会 page:
-    distribution histogram, hot lists, and the sector heatmap."""
-    # Imported lazily to avoid a circular import at module load.
+_ov_cache: tuple[float, list[OverviewRow]] | None = None
+_OV_TTL = 20.0  # seconds — overview only changes when snapshots re-sync (daily-ish)
+_ov_lock = threading.Lock()  # serialize cache read/write + the one-time backfill write
+
+
+def invalidate_overview() -> None:
+    """Drop the overview TTL cache so the next read reflects a just-finished sync."""
+    global _ov_cache
+    with _ov_lock:
+        _ov_cache = None
+
+
+def _backfill_overview_columns() -> None:
+    """One-time: snapshots written before the denormalized columns existed have
+    ``market IS NULL``. Parse just those (not every row) and fill the columns, so
+    ``get_overview`` never parses JSON again after the first pass."""
     from .research import ResearchBundle
 
-    out: list[OverviewRow] = []
     with session_scope() as s:
-        snaps = s.query(Snapshot).all()
-        for snap in snaps:
-            if not snap.bundle_json:
-                continue
+        stale = (
+            s.query(Snapshot)
+            .filter(Snapshot.market.is_(None), Snapshot.bundle_json != "")
+            .all()
+        )
+        for snap in stale:
             try:
                 b = ResearchBundle.model_validate_json(snap.bundle_json)
             except Exception:  # noqa: BLE001
                 continue
-            out.append(
-                OverviewRow(
-                    symbol=b.symbol,
-                    name=b.quote.name or b.fundamentals.name,
-                    market=b.market,
-                    sector=b.fundamentals.sector,
-                    price=b.quote.price,
-                    change_pct=b.quote.change_pct,
-                    market_cap=b.fundamentals.market_cap,
+            snap.name = b.quote.name or b.fundamentals.name
+            snap.market = b.market
+            snap.sector = b.fundamentals.sector
+            snap.price = b.quote.price
+            snap.change_pct = b.quote.change_pct
+            snap.market_cap = b.fundamentals.market_cap
+
+
+def get_overview(force: bool = False) -> list[OverviewRow]:
+    """All synced symbols with the fields the 机会 page needs (distribution histogram,
+    hot lists, sector heatmap). Reads denormalized columns only — no per-row JSON parse —
+    and caches the result for a short TTL. Serialized by a lock so concurrent callers don't
+    double-run the one-time backfill (a write) or race the cache."""
+    global _ov_cache
+    with _ov_lock:
+        now = time.time()
+        if not force and _ov_cache and now - _ov_cache[0] < _OV_TTL:
+            return _ov_cache[1]
+
+        _backfill_overview_columns()
+        with session_scope() as s:
+            # Exclude rows never denormalized (blank/unparseable bundle → market stays NULL);
+            # emitting them would push all-None entries into the histogram / sector heatmap.
+            rows = (
+                s.query(
+                    Snapshot.symbol,
+                    Snapshot.name,
+                    Snapshot.market,
+                    Snapshot.sector,
+                    Snapshot.price,
+                    Snapshot.change_pct,
+                    Snapshot.market_cap,
                 )
+                .filter(Snapshot.market.isnot(None))
+                .all()
             )
-    return out
+        out = [
+            OverviewRow(
+                symbol=r[0],
+                name=r[1],
+                market=r[2],
+                sector=r[3],
+                price=r[4],
+                change_pct=r[5],
+                market_cap=r[6],
+            )
+            for r in rows
+        ]
+        _ov_cache = (now, out)
+        return out

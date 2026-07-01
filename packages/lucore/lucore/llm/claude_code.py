@@ -9,6 +9,7 @@ import subprocess
 
 from ..config import get_settings
 from .base import LLMError, LLMProvider
+from .concurrency import LLMBusyError, llm_slot
 
 
 class ClaudeCodeProvider(LLMProvider):
@@ -28,9 +29,14 @@ class ClaudeCodeProvider(LLMProvider):
         if self.mcp_config:
             cmd += ["--mcp-config", self.mcp_config]
         try:
-            proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=self.timeout
-            )
+            # Throttle concurrent subprocesses to a safe width (shared Max-plan quota).
+            # Bound the queue wait by the same timeout so a burst can't hang a caller forever.
+            with llm_slot(timeout=self.timeout):
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=self.timeout
+                )
+        except LLMBusyError as e:
+            raise LLMError(str(e)) from e
         except FileNotFoundError as e:
             raise LLMError(
                 f"`{s.claude_bin}` not found — install Claude Code or set LU_CLAUDE_BIN"

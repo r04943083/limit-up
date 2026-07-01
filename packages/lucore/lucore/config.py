@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     claude_model: str | None = Field(default=None)  # None = Claude Code default
     glm_api_key: str | None = Field(default=None)
     anthropic_api_key: str | None = Field(default=None)
+    # Cap concurrent LLM subprocesses. Every `claude -p` forks a heavy Claude Code process
+    # sharing one Max-plan quota; without a cap, a burst of concurrent AI requests fork-bombs
+    # the host and trips rate limits. Requests beyond the cap queue (fair) rather than fail.
+    llm_max_concurrency: int = Field(default=2, ge=1)
 
     # --- Data sources ---
     # Comma-free; toggled individually. yfinance needs no key.

@@ -185,6 +185,9 @@ def sync_all(deep: bool = True, max_age_hours: float = 6.0) -> SyncResult:
         result.profiles_synced = prof_n
 
     result.feeds = _refresh_global_feeds()
+    # The overview page reads a short-TTL cache; drop it so it reflects this sync at once.
+    from .markets_svc import invalidate_overview
+    invalidate_overview()
     return result
 
 

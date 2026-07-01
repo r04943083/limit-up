@@ -12,6 +12,7 @@ import {
   type SavedNewsAnalysis, type CouncilResult,
 } from "@/lib/api";
 import { num, compact, pct, signedPct, recTone, sinceLabel, dirClass, errText } from "@/lib/format";
+import { isUS } from "@/lib/market";
 
 // Persona stance → app palette label (红=看多/up · 绿=看空/down · amber=中性).
 const STANCE_CLS: Record<string, { label: string; cls: string }> = {
@@ -41,6 +42,7 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
   const [ta, setTa] = useState<Technical | null>(null);
   const [ohlcv, setOhlcv] = useState<OhlcvBar[] | null>(null);
   const [intra, setIntra] = useState<IntradayPoint[] | null>(null);
+  const [extHours, setExtHours] = useState(true);  // US: include pre/after-market points
   const [daily, setDaily] = useState<OhlcvBar[] | null>(null);
   const [analysis, setAnalysis] = useState<SavedAnalysis | null>(null);
   const [council, setCouncil] = useState<CouncilResult | null>(null);
@@ -55,6 +57,11 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
   const [chartLoading, setChartLoading] = useState(false);
 
   const tf = TIMEFRAMES[kidx];
+  // US equities carry pre/after-market points; the RTH/EXT toggle drops extended hours.
+  const usIntraday = tf.kind === "intraday" && isUS(sym);
+  const intraShown = intra && usIntraday && !extHours
+    ? intra.filter((p) => p.session === "reg")
+    : intra;
 
   const loadBundle = useCallback(() => {
     if (!sym) return;
@@ -163,6 +170,15 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
               {k.label}
             </button>
           ))}
+          {usIntraday && (
+            <button
+              onClick={() => setExtHours((v) => !v)}
+              title="盘前盘后(美股扩展时段)"
+              className={`ml-2 px-2 py-1 rounded text-[11px] transition-colors ${extHours ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink border border-line"}`}
+            >
+              盘前盘后
+            </button>
+          )}
           <span className="ml-auto text-[11px] text-ink-faint">
             {tf.kind === "intraday" ? "分时为实时数据" : rb ? `数据更新于 ${sinceLabel(rb.generated_at)}` : ""}
           </span>
@@ -173,7 +189,7 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
             <span className="absolute top-5 right-6 z-10 text-[11px] text-ink-faint bg-panel/80 border border-line rounded px-2 py-0.5">加载中…</span>
           )}
           {tf.kind === "intraday" ? (
-            intra ? <IntradayChart data={intra} baseline={prev?.close ?? null} /> : (
+            intraShown ? <IntradayChart data={intraShown} baseline={prev?.close ?? null} /> : (
               <div className="h-[420px] grid place-items-center text-ink-faint text-sm">{err ? "分时加载失败" : "分时加载中…"}</div>
             )
           ) : ohlcv && ta ? <Chart ohlcv={ohlcv} technical={ta} /> : (

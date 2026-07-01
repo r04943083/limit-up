@@ -9,6 +9,8 @@ from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
 from lucore.services.financials import DcfView, compute_dcf, get_financials_cached
 from lucore.services.intraday import IntradayPoint, get_intraday
+from lucore.services import jobs as jobs_svc
+from lucore.services.livecache import cached_intraday, cached_quote
 from lucore.services.profile import get_profile_cached
 from lucore.services.news import SavedNewsAnalysis, analyze_news, latest_news_analysis
 from lucore.services.research import ResearchBundle, get_research, get_technical
@@ -27,7 +29,8 @@ def search(q: str = "", limit: int = 20) -> list[SymbolHit]:
 
 @router.get("/{symbol}/quote", response_model=Quote)
 def quote(symbol: str) -> Quote:
-    return get_router().get_quote(symbol.upper())
+    sym = symbol.upper()
+    return cached_quote(sym, lambda: get_router().get_quote(sym))
 
 
 @router.get("/{symbol}/research", response_model=ResearchBundle)
@@ -63,9 +66,11 @@ def ohlcv(symbol: str, period: str = "1y", interval: str = "1d") -> list[Bar]:
 
 
 @router.get("/{symbol}/intraday", response_model=list[IntradayPoint])
-def intraday(symbol: str, range: str = "1d") -> list[IntradayPoint]:
-    """分时(1d/1m)或 5 日(5d/5m)。Live, not cached — intraday has many bars per day."""
-    return get_intraday(symbol.upper(), range)
+def intraday(symbol: str, range: str = "1d", prepost: bool = True) -> list[IntradayPoint]:
+    """分时(1d/1m)或 5 日(5d/5m)。US 默认含盘前盘后(prepost=true),每点带 session 标签。
+    短 TTL 缓存 + single-flight,并发同一标的只打一次上游。"""
+    sym = symbol.upper()
+    return cached_intraday(sym, range, prepost, lambda: get_intraday(sym, range, prepost=prepost))
 
 
 @router.get("/{symbol}/technical", response_model=TechnicalAnalysis)
@@ -130,6 +135,14 @@ def analyze(symbol: str) -> SavedAnalysis:
         return analyze_stock(symbol.upper())
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"analysis failed: {e}") from e
+
+
+@router.post("/{symbol}/analyze/async", response_model=jobs_svc.Job)
+def analyze_async(symbol: str) -> jobs_svc.Job:
+    """Submit the AI 解读 as a background job; poll /jobs/{id} for the SavedAnalysis result.
+    Avoids holding a 30–60s HTTP connection open."""
+    sym = symbol.upper()
+    return jobs_svc.submit("analyze", lambda: analyze_stock(sym))
 
 
 @router.get("/{symbol}/analysis", response_model=SavedAnalysis | None)

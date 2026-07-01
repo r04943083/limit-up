@@ -27,3 +27,21 @@ test("研究页:全局搜索跳转 + 财报/DCF 渲染", async ({ page }) => {
   await page.waitForTimeout(1500);
   expectClean(w);
 });
+
+test("研究页:美股分时含盘前盘后开关(RTH/EXT)", async ({ page }) => {
+  const w = watch(page);
+  await page.goto("/research/AAPL");
+
+  // Switch the chart to 分时 (intraday). US equities expose an extended-hours toggle.
+  await page.getByRole("button", { name: "分时", exact: true }).click();
+  const extBtn = page.getByRole("button", { name: "盘前盘后" });
+  await expect(extBtn).toBeVisible({ timeout: 10_000 });
+
+  // Toggling extended hours off then on must not error or blank the chart.
+  await extBtn.click();
+  await page.waitForTimeout(400);
+  await extBtn.click();
+  await page.waitForTimeout(400);
+
+  expectClean(w);
+});

@@ -110,6 +110,13 @@ def save_snapshot(bundle: ResearchBundle) -> None:
                     bundle = bundle.model_copy(update=update)
         snap.bundle_json = bundle.model_dump_json()
         snap.synced_at = now
+        # Denormalize the overview fields so the 机会 page never re-parses this JSON.
+        snap.name = bundle.quote.name or bundle.fundamentals.name
+        snap.market = bundle.market
+        snap.sector = bundle.fundamentals.sector
+        snap.price = bundle.quote.price
+        snap.change_pct = bundle.quote.change_pct
+        snap.market_cap = bundle.fundamentals.market_cap
 
 
 def load_snapshot(symbol: str) -> ResearchBundle | None:
@@ -123,11 +130,27 @@ def load_snapshot(symbol: str) -> ResearchBundle | None:
 def get_research(symbol: str, *, cached: bool = True, news_limit: int = 6) -> ResearchBundle:
     """Cached-first read for the UI: return the stored snapshot if present (fast),
     otherwise fetch live and persist it. Pass cached=False to force a live refresh."""
-    if cached:
-        snap = load_snapshot(symbol)
-        if snap is not None:
-            return snap
-    return build_research_bundle(symbol, news_limit=news_limit)
+    if not cached:
+        # Forced live refresh: the caller explicitly wants a fresh rebuild, so never dedupe
+        # it against a concurrent cached read (which would hand back the stored snapshot).
+        return build_research_bundle(symbol, news_limit=news_limit)
+
+    snap = load_snapshot(symbol)
+    if snap is not None:
+        return snap
+    # Cold cached read: dedupe concurrent viewers of the same uncached symbol so only one runs
+    # the live fetch (+ snapshot write); the rest wait and share it. Re-check the snapshot
+    # inside the flight in case a sibling populated it while we queued. Key includes news_limit
+    # so callers wanting a different news count don't inherit the leader's.
+    from .livecache import research_single_flight
+
+    def _load_or_build() -> ResearchBundle:
+        snap2 = load_snapshot(symbol)
+        if snap2 is not None:
+            return snap2
+        return build_research_bundle(symbol, news_limit=news_limit)
+
+    return research_single_flight(f"{symbol.upper()}:{news_limit}", _load_or_build)
 
 
 def snapshot_synced_at(symbol: str) -> dt.datetime | None:

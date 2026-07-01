@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from lucore.services import coach as coach_svc
 from lucore.services import debate as debate_svc
 from lucore.services import dna as dna_svc
+from lucore.services import jobs as jobs_svc
 from lucore.services import multi_agent as ma_svc
 from lucore.services import personas as personas_svc
 from lucore.services.analyze import SavedAnalysis
@@ -43,6 +44,12 @@ def run_council(symbol: str) -> personas_svc.SavedCouncil:
         raise HTTPException(status_code=502, detail=f"council failed: {e}") from e
 
 
+@router.post("/council/{symbol}/async", response_model=jobs_svc.Job)
+def run_council_async(symbol: str) -> jobs_svc.Job:
+    """Submit the 人格会诊 as a background job; poll /jobs/{id} for the SavedCouncil."""
+    return jobs_svc.submit("council", lambda: personas_svc.run_council(symbol))
+
+
 # ---- Debate (#19) ----
 @router.get("/debate/{symbol}", response_model=debate_svc.SavedDebate | None)
 def get_debate(symbol: str) -> debate_svc.SavedDebate | None:
@@ -58,6 +65,14 @@ def run_debate(symbol: str, bull: str | None = None, bear: str | None = None) ->
         raise HTTPException(status_code=502, detail=f"debate failed: {e}") from e
 
 
+@router.post("/debate/{symbol}/async", response_model=jobs_svc.Job)
+def run_debate_async(symbol: str, bull: str | None = None, bear: str | None = None) -> jobs_svc.Job:
+    """Submit the 多空辩论 as a background job; poll /jobs/{id} for the SavedDebate."""
+    return jobs_svc.submit(
+        "debate", lambda: debate_svc.run_debate(symbol, bull_persona=bull, bear_persona=bear)
+    )
+
+
 # ---- Multi-agent (#14) ----
 @router.get("/panel/{symbol}", response_model=ma_svc.SavedMultiAgent | None)
 def get_panel(symbol: str) -> ma_svc.SavedMultiAgent | None:
@@ -70,6 +85,12 @@ def run_panel(symbol: str) -> ma_svc.SavedMultiAgent:
         return ma_svc.run_panel(symbol)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"panel failed: {e}") from e
+
+
+@router.post("/panel/{symbol}/async", response_model=jobs_svc.Job)
+def run_panel_async(symbol: str) -> jobs_svc.Job:
+    """Submit the 多智能体投研 as a background job; poll /jobs/{id} for the SavedMultiAgent."""
+    return jobs_svc.submit("panel", lambda: ma_svc.run_panel(symbol))
 
 
 # ---- Coach (#12) ----
