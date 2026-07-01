@@ -6,6 +6,10 @@ from pydantic import BaseModel
 
 from lucore.compute.portfolio import PortfolioAnalytics
 from lucore.services import portfolio as pf
+from lucore.services.portfolio_advanced import (
+    AttributionResult, TlhServiceResult, compute_attribution, compute_tlh,
+)
+from lucore.services.portfolio_optimize import OptimizeResult, optimize_portfolio
 from lucore.services.portfolio_perf import PortfolioTearsheet, compute_portfolio_tearsheet
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -55,6 +59,34 @@ def tearsheet(portfolio_id: int) -> PortfolioTearsheet:
         return compute_portfolio_tearsheet(portfolio_id)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"tearsheet error: {e}") from e
+
+
+@router.get("/{portfolio_id}/optimize", response_model=OptimizeResult)
+def optimize(portfolio_id: int, method: str = "max_sharpe", capital: float | None = None) -> OptimizeResult:
+    """Optimizer weights (max_sharpe / min_variance / risk_parity / black_litterman) + a
+    whole-share allocation plan for the current holdings."""
+    try:
+        return optimize_portfolio(portfolio_id, method=method, capital=capital)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"optimize error: {e}") from e
+
+
+@router.get("/{portfolio_id}/attribution", response_model=AttributionResult)
+def attribution(portfolio_id: int) -> AttributionResult:
+    """Brinson attribution (allocation / selection / interaction) vs an equal-weight benchmark."""
+    try:
+        return compute_attribution(portfolio_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"attribution error: {e}") from e
+
+
+@router.get("/{portfolio_id}/tlh", response_model=TlhServiceResult)
+def tlh(portfolio_id: int) -> TlhServiceResult:
+    """Tax-loss-harvesting candidates (unrealized losses) with a 30-day wash-sale flag."""
+    try:
+        return compute_tlh(portfolio_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"tlh error: {e}") from e
 
 
 @router.post("/{portfolio_id}/review")

@@ -21,6 +21,10 @@ test("组合页:概览 / 分布 / 相关性 / 点评入口", async ({ page }) =>
     await expect(page.getByRole("button", { name: "删除" }).first()).toBeVisible();
     // The deterministic performance tear-sheet panel renders alongside the analytics.
     await expect(page.getByRole("heading", { name: "绩效 tear-sheet" })).toBeVisible();
+    // Advanced analytics: optimizer / Brinson attribution / TLH panels render.
+    await expect(page.getByRole("heading", { name: "组合优化" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Brinson/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /TLH/ })).toBeVisible();
   }
 
   // AI review entry exists (do NOT click — it triggers a slow/billed claude -p call).

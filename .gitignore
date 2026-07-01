@@ -47,6 +47,7 @@ npm-debug.log*
 # Playwright E2E artifacts
 apps/web/playwright-report/
 apps/web/test-results/
+test-results/
 apps/web/blob-report/
 .playwright-mcp/
 apps/web/.playwright-mcp/

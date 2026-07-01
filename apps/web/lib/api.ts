@@ -462,6 +462,46 @@ export type PortfolioTearsheet = {
 };
 export const getTearsheet = (pid: number) => get<PortfolioTearsheet>(`/portfolio/${pid}/tearsheet`);
 
+// ---- Optimizer (mean-variance / risk-parity / Black-Litterman) + integer allocation ----
+export type OptWeights = {
+  method: string; symbols: string[]; weights: number[];
+  expected_return_pct: number | null; volatility_pct: number | null; sharpe: number | null;
+  note: string | null;
+};
+export type Allocation = { symbol: string; weight_pct: number; shares: number; value: number };
+export type AllocationPlan = { capital: number; allocations: Allocation[]; leftover_cash: number };
+export type OptimizeResult = {
+  ok: boolean; error: string | null; method: string;
+  weights: OptWeights; current_weights: Record<string, number>; plan: AllocationPlan | null;
+};
+export const getOptimize = (pid: number, method = "max_sharpe") =>
+  get<OptimizeResult>(`/portfolio/${pid}/optimize?method=${method}`);
+
+// ---- Brinson attribution ----
+export type SegmentEffect = {
+  segment: string; port_weight: number; bench_weight: number;
+  port_return_pct: number; bench_return_pct: number;
+  allocation: number; selection: number; interaction: number;
+};
+export type Attribution = {
+  benchmark: string; segments: SegmentEffect[];
+  port_return_pct: number; bench_return_pct: number;
+  allocation_pct: number; selection_pct: number; interaction_pct: number; total_active_pct: number;
+};
+export type AttributionResult = { ok: boolean; error: string | null; attribution: Attribution };
+export const getAttribution = (pid: number) => get<AttributionResult>(`/portfolio/${pid}/attribution`);
+
+// ---- Tax-loss harvesting ----
+export type TlhCandidate = {
+  symbol: string; quantity: number; avg_cost: number; price: number;
+  unrealized_loss: number; loss_pct: number; wash_sale_risk: boolean; note: string | null;
+};
+export type TlhServiceResult = {
+  ok: boolean; error: string | null;
+  result: { candidates: TlhCandidate[]; total_harvestable_loss: number };
+};
+export const getTlh = (pid: number) => get<TlhServiceResult>(`/portfolio/${pid}/tlh`);
+
 // ---- Deterministic price patterns (candlestick + chart formations) ----
 export type PatternHit = { date: string; name: string; kind: "bullish" | "bearish" | "neutral"; category: "candle" | "chart"; detail: string | null };
 export const getPatterns = (s: string, period = "1y", interval = "1d") =>
