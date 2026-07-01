@@ -29,6 +29,20 @@ def analyze_as(key: str, symbol: str) -> SavedAnalysis:
         raise HTTPException(status_code=502, detail=f"analyze failed: {e}") from e
 
 
+# ---- Persona council / 人格会诊 (#13) ----
+@router.get("/council/{symbol}", response_model=personas_svc.SavedCouncil | None)
+def get_council(symbol: str) -> personas_svc.SavedCouncil | None:
+    return personas_svc.latest_council(symbol)
+
+
+@router.post("/council/{symbol}", response_model=personas_svc.SavedCouncil)
+def run_council(symbol: str) -> personas_svc.SavedCouncil:
+    try:
+        return personas_svc.run_council(symbol)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"council failed: {e}") from e
+
+
 # ---- Debate (#19) ----
 @router.get("/debate/{symbol}", response_model=debate_svc.SavedDebate | None)
 def get_debate(symbol: str) -> debate_svc.SavedDebate | None:

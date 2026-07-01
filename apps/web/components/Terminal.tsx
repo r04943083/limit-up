@@ -7,11 +7,18 @@ import ValuationPanel from "@/components/ValuationPanel";
 import { Stat, RecBadge, ScoreMeter } from "@/components/ui";
 import {
   getResearch, getTechnical, getOhlcv, getIntraday, getAnalysis, runAnalyze,
-  getNewsAnalysis, runNewsAnalysis,
+  getNewsAnalysis, runNewsAnalysis, getCouncil, runCouncil,
   type ResearchBundle, type Technical, type OhlcvBar, type IntradayPoint, type SavedAnalysis,
-  type SavedNewsAnalysis,
+  type SavedNewsAnalysis, type CouncilResult,
 } from "@/lib/api";
-import { num, compact, pct, signedPct, recTone, sinceLabel, dirClass } from "@/lib/format";
+import { num, compact, pct, signedPct, recTone, sinceLabel, dirClass, errText } from "@/lib/format";
+
+// Persona stance → app palette label (红=看多/up · 绿=看空/down · amber=中性).
+const STANCE_CLS: Record<string, { label: string; cls: string }> = {
+  bullish: { label: "看多", cls: "text-up" },
+  bearish: { label: "看空", cls: "text-down" },
+  neutral: { label: "中性", cls: "text-warn" },
+};
 
 // 分时/5日 are live intraday lines; 日K/周K/月K are cached candlesticks.
 const TIMEFRAMES = [
@@ -36,6 +43,9 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
   const [intra, setIntra] = useState<IntradayPoint[] | null>(null);
   const [daily, setDaily] = useState<OhlcvBar[] | null>(null);
   const [analysis, setAnalysis] = useState<SavedAnalysis | null>(null);
+  const [council, setCouncil] = useState<CouncilResult | null>(null);
+  const [councilBusy, setCouncilBusy] = useState(false);
+  const [councilErr, setCouncilErr] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [newsAna, setNewsAna] = useState<SavedNewsAnalysis | null>(null);
@@ -89,9 +99,20 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
     getAnalysis(sym).then(setAnalysis).catch(() => {});
     setNewsAna(null);
     getNewsAnalysis(sym).then(setNewsAna).catch(() => {});
+    setCouncil(null); setCouncilErr(null);
+    getCouncil(sym).then((d) => setCouncil(d?.result ?? null)).catch(() => setCouncil(null));
     // reloadKey is bumped by StockPage's ↻ 更新 so the chart + bundle refresh together
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sym, loadBundle, reloadKey]);
+
+  const convene = useCallback(() => {
+    if (!sym) return;
+    // Council has its OWN error slot (not the shared chart `err`) so a failed LLM run shows
+    // next to the 会诊 button, and never flips the center chart to "图表加载失败".
+    setCouncilBusy(true); setCouncilErr(null);
+    runCouncil(sym).then((d) => setCouncil(d.result))
+      .catch((e) => setCouncilErr(errText(e))).finally(() => setCouncilBusy(false));
+  }, [sym]);
 
   // Keep the previous chart visible while the next loads (avoids a jarring blank);
   // a subtle badge signals the refresh.
@@ -353,6 +374,41 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
               ) : (
                 <p className="text-sm text-ink-faint">运行 AI 大脑,得到有依据的论点、评分、风险与催化剂(中文)。</p>
               )}
+
+              {/* 大师会诊: all investor personas vote on this stock (人格 × 辩论). */}
+              <div className="pt-3 mt-1 border-t border-line">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] uppercase tracking-wide text-ink-faint">大师会诊</span>
+                  <button onClick={convene} disabled={councilBusy}
+                    className="text-xs text-accent hover:underline disabled:opacity-50">
+                    {councilBusy ? "会诊中… (~30–90s)" : council ? "重新会诊" : "全员会诊"}
+                  </button>
+                </div>
+                {councilErr && <p className="text-xs text-down mb-2">{councilErr}</p>}
+                {council ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={STANCE_CLS[council.consensus]?.cls ?? "text-warn"}>
+                        共识 {STANCE_CLS[council.consensus]?.label ?? "中性"}
+                      </span>
+                      <span className="text-up">多 {council.bullish}</span>
+                      <span className="text-warn">中 {council.neutral}</span>
+                      <span className="text-down">空 {council.bearish}</span>
+                      <span className="text-ink-faint ml-auto tnum">均分 {council.avg_score.toFixed(1)}</span>
+                    </div>
+                    {council.verdicts.map((v) => (
+                      <div key={v.key} className="text-xs flex items-start gap-2">
+                        <span className="text-ink w-24 shrink-0 truncate">{v.name}</span>
+                        <span className={`${STANCE_CLS[v.stance]?.cls ?? "text-warn"} w-8 shrink-0`}>{STANCE_CLS[v.stance]?.label ?? "中性"}</span>
+                        <span className="text-ink-faint tnum w-7 shrink-0">{v.score.toFixed(1)}</span>
+                        <span className="text-ink-dim leading-snug">{v.rationale}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : !councilBusy && (
+                  <p className="text-xs text-ink-faint">让六位投资大师(价值/成长/动量/创新/宏观/逆向)各自表态并投票。</p>
+                )}
+              </div>
             </>
           )}
         </div>

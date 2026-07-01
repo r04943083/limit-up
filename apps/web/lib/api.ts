@@ -734,6 +734,18 @@ export const getPersonas = () => get<Persona[]>("/studio/personas");
 export const analyzeAsPersona = (key: string, symbol: string) =>
   post<SavedAnalysis>(`/studio/personas/${key}/analyze/${symbol}`);
 
+// 人格会诊: all personas judge one stock at once; Python tallies the vote + consensus.
+export type CouncilVerdict = {
+  key: string; name: string; style: string; stance: string; score: number; rationale: string;
+};
+export type CouncilResult = {
+  verdicts: CouncilVerdict[];
+  bullish: number; neutral: number; bearish: number; avg_score: number; consensus: string;
+};
+export type SavedCouncil = { symbol: string; provider: string; created_at: string; result: CouncilResult };
+export const getCouncil = (s: string) => get<SavedCouncil | null>(`/studio/council/${s}`);
+export const runCouncil = (s: string) => post<SavedCouncil>(`/studio/council/${s}`);
+
 export type DebateResult = {
   bull_case: string; bear_case: string; bull_rebuttal: string; bear_rebuttal: string;
   winner: string; confidence: number; verdict: string; key_question: string;

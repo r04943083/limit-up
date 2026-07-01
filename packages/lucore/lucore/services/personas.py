@@ -7,10 +7,18 @@ the LLM weighs the deterministic facts; it never invents numbers.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel
+import datetime as dt
+import json
 
-from .analyze import SavedAnalysis, analyze_stock
-from ..llm.base import LLMProvider
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+
+from .analyze import SavedAnalysis, _facts, analyze_stock
+from .research import get_research
+from . import usage
+from ..db import session_scope
+from ..db.models import Analysis
+from ..llm.base import LLMProvider, get_provider, with_chinese
 
 
 class Persona(BaseModel):
@@ -104,3 +112,133 @@ def analyze_as(symbol: str, persona_key: str, *, provider: LLMProvider | None = 
         f"the thesis. Keep LU's deterministic numbers as ground truth."
     )
     return analyze_stock(symbol, provider=provider, persona_system=system)
+
+
+# --------------------------------------------------------------------------- 人格会诊 (council)
+# All personas judge the SAME stock at once (one batched LLM call). The LLM voices each master's
+# stance / conviction / one-liner; Python tallies the vote + consensus deterministically
+# (dual-brain: the model never decides the aggregate — that's computed here).
+_STANCES = ("bullish", "neutral", "bearish")
+
+
+class CouncilVerdict(BaseModel):
+    key: str
+    name: str = ""
+    style: str = ""
+    stance: str = "neutral"  # bullish | neutral | bearish
+    score: float = Field(default=5.0, ge=0, le=10)  # conviction within that master's own framework
+    rationale: str = ""
+
+
+class CouncilResult(BaseModel):
+    verdicts: list[CouncilVerdict] = []
+    bullish: int = 0
+    neutral: int = 0
+    bearish: int = 0
+    avg_score: float = 0.0
+    consensus: str = "neutral"  # strict plurality of all three stances; ties → neutral
+
+
+class SavedCouncil(BaseModel):
+    symbol: str
+    provider: str
+    created_at: dt.datetime
+    result: CouncilResult
+
+
+def _build_council(raw: dict) -> CouncilResult:
+    """Turn the LLM's per-master verdicts into a validated, deduped board + a deterministic
+    vote tally. Unknown / duplicate persona keys are dropped; name & style come from the
+    registry (never trusted from the model); stance/score are coerced into range."""
+    verdicts: list[CouncilVerdict] = []
+    seen: set[str] = set()
+    for v in raw.get("verdicts") or []:
+        key = str(v.get("key", "")).strip()
+        p = _BY_KEY.get(key)
+        if p is None or key in seen:
+            continue
+        seen.add(key)
+        stance = str(v.get("stance", "neutral")).strip().lower()
+        if stance not in _STANCES:
+            stance = "neutral"
+        try:
+            score = max(0.0, min(10.0, float(v.get("score", 5.0))))
+        except (TypeError, ValueError):
+            score = 5.0
+        verdicts.append(CouncilVerdict(
+            key=key, name=p.name, style=p.style, stance=stance,
+            score=round(score, 1), rationale=str(v.get("rationale", "")).strip(),
+        ))
+    # Keep the registry order so the board is stable regardless of the LLM's ordering.
+    verdicts.sort(key=lambda x: [pp.key for pp in _PERSONAS].index(x.key))
+    bullish = sum(1 for x in verdicts if x.stance == "bullish")
+    bearish = sum(1 for x in verdicts if x.stance == "bearish")
+    neutral = sum(1 for x in verdicts if x.stance == "neutral")
+    avg = round(sum(x.score for x in verdicts) / len(verdicts), 1) if verdicts else 0.0
+    # Strict plurality across ALL three stances (neutral included) — so a board where most
+    # masters abstain isn't declared bullish/bearish off one lone directional vote. Any tie
+    # (including no verdicts) → neutral.
+    counts = {"bullish": bullish, "neutral": neutral, "bearish": bearish}
+    top = max(counts.values())
+    leaders = [k for k, v in counts.items() if v == top]
+    consensus = leaders[0] if len(leaders) == 1 else "neutral"
+    return CouncilResult(verdicts=verdicts, bullish=bullish, neutral=neutral, bearish=bearish,
+                         avg_score=avg, consensus=consensus)
+
+
+def run_council(symbol: str, *, provider: LLMProvider | None = None) -> SavedCouncil:
+    """Convene all personas on one stock in a single batched call, then tally the vote."""
+    bundle = get_research(symbol, cached=True)  # cache-first: reliable + no rate-limit 500s
+    provider = provider or get_provider()
+    roster = [{"key": p.key, "name": p.name, "lens": p.system} for p in _PERSONAS]
+    prompt = (
+        f"{len(_PERSONAS)} investor masters each judge {bundle.symbol} in their OWN style, arguing "
+        f"ONLY from these facts (ground truth — no invented numbers):\n"
+        f"{json.dumps(_facts(bundle), indent=2, default=str)}\n\n"
+        f"The masters (judge as each, strictly in character):\n"
+        f"{json.dumps(roster, ensure_ascii=False, indent=2)}\n\n"
+        'Return ONLY JSON: {"verdicts": [{"key": <persona key>, "stance": "bullish|neutral|bearish", '
+        '"score": <0-10 conviction within THAT master\'s framework>, '
+        '"rationale": <one concise Chinese sentence in that master\'s voice>}, ...]} '
+        "— exactly one entry per master, key must match the roster."
+    )
+    system = with_chinese(
+        "You are LU's investment-council moderator, voicing each master faithfully and "
+        "adversarially — they should genuinely disagree where their styles diverge. JSON only."
+    )
+    raw = provider.generate_json(prompt, system=system)
+    usage.record(provider, "council", symbol)
+    return _persist_council(symbol, _build_council(raw), provider.name)
+
+
+def _persist_council(symbol: str, result: CouncilResult, provider: str) -> SavedCouncil:
+    sym = symbol.upper()
+    idem = dt.date.today().isoformat()  # one council per symbol per day
+    with session_scope() as s:
+        existing = s.execute(
+            select(Analysis).where(
+                Analysis.symbol == sym, Analysis.kind == "council", Analysis.idempotency_key == idem,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            existing = Analysis(symbol=sym, kind="council", idempotency_key=idem)
+            s.add(existing)
+        existing.summary = f"{result.consensus} · 多 {result.bullish}/中 {result.neutral}/空 {result.bearish}"
+        existing.structured_json = result.model_dump_json()
+        existing.provider = provider
+        s.flush()
+        return SavedCouncil(symbol=sym, provider=provider, created_at=existing.created_at, result=result)
+
+
+def latest_council(symbol: str) -> SavedCouncil | None:
+    with session_scope() as s:
+        row = s.execute(
+            select(Analysis).where(Analysis.symbol == symbol.upper(), Analysis.kind == "council")
+            .order_by(Analysis.created_at.desc()).limit(1)
+        ).scalar_one_or_none()
+        if row is None or not row.structured_json:
+            return None
+        return SavedCouncil(
+            symbol=row.symbol, provider=row.provider, created_at=row.created_at,
+            result=CouncilResult.model_validate_json(row.structured_json),
+        )

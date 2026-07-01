@@ -6,12 +6,20 @@ import Panel from "@/components/Panel";
 import SymbolInput from "@/components/SymbolInput";
 import { Chip, RecBadge, ScoreMeter, Stat } from "@/components/ui";
 import {
-  analyzeAsPersona, getCoach, getDebate, getDna, getPanel, getPersonas,
-  runCoach, runDebate, runDna, runPanel,
-  type CoachResult, type DebateResult, type DnaResult, type MultiAgentResult,
+  analyzeAsPersona, getCoach, getCouncil, getDebate, getDna, getPanel, getPersonas,
+  runCoach, runCouncil, runDebate, runDna, runPanel,
+  type CoachResult, type CouncilResult, type DebateResult, type DnaResult, type MultiAgentResult,
   type Persona, type SavedAnalysis,
 } from "@/lib/api";
-import { recTone } from "@/lib/format";
+import { errText, recTone } from "@/lib/format";
+
+// Stance → app palette (红=看多/up · 绿=看空/down · amber=中性), Futu convention.
+const STANCE: Record<string, { label: string; tone: "up" | "down" | "amber" }> = {
+  bullish: { label: "看多", tone: "up" },
+  bearish: { label: "看空", tone: "down" },
+  neutral: { label: "中性", tone: "amber" },
+};
+const stanceOf = (s: string) => STANCE[s] ?? STANCE.neutral;
 
 type Tab = "debate" | "panel" | "persona" | "coach" | "dna";
 const TABS: { key: Tab; label: string }[] = [
@@ -155,6 +163,49 @@ function PanelTab() {
   );
 }
 
+function CouncilBoard({ result }: { result: CouncilResult }) {
+  const total = result.verdicts.length || 1;
+  return (
+    <Panel title="大师会诊" hint={`${stanceOf(result.consensus).label} · 均分 ${result.avg_score.toFixed(1)}/10`}>
+      {/* Vote tally bar: red=看多 / amber=中性 / green=看空 */}
+      <div className="flex items-center gap-3 mb-3 text-xs">
+        <span className="text-up">看多 {result.bullish}</span>
+        <span className="text-warn">中性 {result.neutral}</span>
+        <span className="text-down">看空 {result.bearish}</span>
+        <div className="flex-1 h-1.5 rounded-full overflow-hidden flex bg-panel-2">
+          <div className="h-full bg-up" style={{ width: `${(result.bullish / total) * 100}%` }} />
+          <div className="h-full bg-warn" style={{ width: `${(result.neutral / total) * 100}%` }} />
+          <div className="h-full bg-down" style={{ width: `${(result.bearish / total) * 100}%` }} />
+        </div>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wide text-ink-faint border-b border-line">
+            <th className="text-left font-medium py-2">大师</th>
+            <th className="text-left font-medium">立场</th>
+            <th className="text-right font-medium">评分</th>
+            <th className="text-left font-medium pl-3">理由</th>
+          </tr>
+        </thead>
+        <tbody>
+          {result.verdicts.map((v) => {
+            const st = stanceOf(v.stance);
+            const tclass = st.tone === "up" ? "text-up" : st.tone === "down" ? "text-down" : "text-warn";
+            return (
+              <tr key={v.key} className="border-b border-line/60 align-top">
+                <td className="py-2 whitespace-nowrap"><span className="text-ink">{v.name}</span></td>
+                <td className={`${tclass} whitespace-nowrap`}>{st.label}</td>
+                <td className="text-right tnum text-ink-dim">{v.score.toFixed(1)}</td>
+                <td className="pl-3 text-ink-dim leading-relaxed">{v.rationale}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}
+
 function PersonaTab() {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [symbol, setSymbol] = useState("NVDA");
@@ -162,19 +213,40 @@ function PersonaTab() {
   const [result, setResult] = useState<SavedAnalysis | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [council, setCouncil] = useState<CouncilResult | null>(null);
+  const [councilBusy, setCouncilBusy] = useState(false);
 
   useEffect(() => { getPersonas().then(setPersonas).catch(() => {}); }, []);
+  // Load any cached council for the default symbol so the board isn't empty on first paint.
+  const loadCouncil = useCallback((s: string) => {
+    getCouncil(s.trim().toUpperCase()).then((d) => setCouncil(d?.result ?? null)).catch(() => setCouncil(null));
+  }, []);
+  useEffect(() => { loadCouncil("NVDA"); }, [loadCouncil]);
+
   const run = (key: string) => {
     setActive(key); setBusy(true); setErr(null); setResult(null);
     analyzeAsPersona(key, symbol.trim().toUpperCase()).then(setResult)
-      .catch((e) => setErr(String(e).replace(/^Error:\s*/, ""))).finally(() => setBusy(false));
+      .catch((e) => setErr(errText(e))).finally(() => setBusy(false));
+  };
+  const convene = () => {
+    setCouncilBusy(true); setErr(null);
+    runCouncil(symbol.trim().toUpperCase()).then((d) => setCouncil(d.result))
+      .catch((e) => setErr(errText(e))).finally(() => setCouncilBusy(false));
   };
   return (
     <div className="space-y-4">
-      <Panel title="投资人格" hint="选一位投资大师的视角分析个股">
-        <SymbolInput value={symbol} onChange={setSymbol} />
+      <Panel title="投资人格" hint="全员会诊,或选一位大师单独深挖">
+        <div className="flex gap-2">
+          {/* Clear the stale board when the symbol changes so it never shows another stock's council. */}
+          <SymbolInput value={symbol} onChange={(s) => { setSymbol(s); setCouncil(null); }} onEnter={convene} className="flex-1" />
+          <button onClick={convene} disabled={councilBusy || !symbol.trim()}
+            className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-2 hover:bg-accent/25 disabled:opacity-40 whitespace-nowrap">
+            {councilBusy ? "会诊中…(约 30–90 秒)" : `全员会诊 ${symbol.trim().toUpperCase()}`}
+          </button>
+        </div>
       </Panel>
       {err && <div className="rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
+      {council && <CouncilBoard result={council} />}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {personas.map((p) => (
           <Panel key={p.key} title={p.name} hint={p.style}>
