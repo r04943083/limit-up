@@ -154,6 +154,42 @@ def fetch_recent_filings(symbol: str, *, limit: int = 15) -> list[FilingRow]:
     return out
 
 
+class FilingSection(BaseModel):
+    date: str | None = None
+    form: str
+    text: str = ""
+
+
+# Diff-able 10-K/10-Q narrative sections → Chinese label. Keys are edgartools TenK/TenQ attrs.
+SECTIONS: dict[str, str] = {
+    "risk_factors": "风险因素",
+    "management_discussion": "管理层讨论 (MD&A)",
+    "business": "业务概况",
+}
+
+
+def fetch_sections(symbol: str, *, form: str = "10-K", section: str = "risk_factors",
+                   n: int = 2) -> list[FilingSection]:
+    """The named narrative section from the ``n`` most recent filings of ``form`` (newest first)."""
+    if section not in SECTIONS:
+        raise ValueError(f"unknown section: {section}")
+    _ensure_identity()
+    import edgar
+
+    company = edgar.Company(symbol.upper())
+    out: list[FilingSection] = []
+    for f in company.get_filings(form=form).head(n):
+        text = ""
+        try:
+            val = getattr(f.obj(), section, None)
+            text = str(val) if val else ""
+        except Exception:  # noqa: BLE001 - a section that won't parse degrades to empty
+            text = ""
+        out.append(FilingSection(date=_to_date_str(getattr(f, "filing_date", None)),
+                                 form=form, text=text))
+    return out
+
+
 def _to_date_str(v) -> str | None:  # noqa: ANN001
     if v is None:
         return None

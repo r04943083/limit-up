@@ -154,6 +154,74 @@ def test_service_cache_first_and_degrade(db, monkeypatch):
     assert r3.ok is False and r3.report.cluster_buy and "edgar down" in r3.error
 
 
+def test_filing_diff_service(db, monkeypatch):
+    from lucore.data import edgar as ed
+    from lucore.services import edgar_svc
+
+    secs = [
+        ed.FilingSection(date="2026-01-01", form="10-K",
+                         text="We face competition. Supply is stable. Margins are healthy."),
+        ed.FilingSection(date="2025-01-01", form="10-K",
+                         text="We face competition. Supply is stable. Costs are rising."),
+    ]  # newest-first
+    monkeypatch.setattr(ed, "fetch_sections", lambda s, **k: secs)
+
+    r = edgar_svc.get_filing_diff("AAPL", form="10-K", section="risk_factors")
+    assert r.ok and r.new_date == "2026-01-01" and r.old_date == "2025-01-01"
+    assert r.section_label == "风险因素"
+    assert r.diff.changed and r.diff.added_count >= 1 and r.diff.removed_count >= 1
+    added = " ".join(c.text for c in r.diff.chunks if c.op == "added")
+    assert "Margins" in added
+
+    # Second call served from cache (fetch_sections not called again).
+    monkeypatch.setattr(ed, "fetch_sections", lambda s, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    r2 = edgar_svc.get_filing_diff("AAPL", form="10-K", section="risk_factors")
+    assert r2.ok and r2.new_date == "2026-01-01"
+
+
+def test_filing_diff_degenerate_is_cached(db, monkeypatch):
+    """A can't-diff result (one filing) is cached so repeated clicks don't re-parse."""
+    from lucore.data import edgar as ed
+    from lucore.services import edgar_svc
+
+    calls = {"n": 0}
+
+    def one_filing(s, **k):
+        calls["n"] += 1
+        return [ed.FilingSection(date="2026-01-01", form="10-K", text="Only one.")]
+
+    monkeypatch.setattr(ed, "fetch_sections", one_filing)
+    r1 = edgar_svc.get_filing_diff("AAPL", section="risk_factors")
+    assert r1.ok is False and calls["n"] == 1
+    r2 = edgar_svc.get_filing_diff("AAPL", section="risk_factors")
+    assert r2.ok is False and calls["n"] == 1  # served from cache, not re-parsed
+
+
+def test_filing_diff_stale_on_error_flags_not_ok(db, monkeypatch):
+    from lucore.data import edgar as ed
+    from lucore.services import edgar_svc
+
+    secs = [ed.FilingSection(date="2026-01-01", form="10-K", text="A. B new."),
+            ed.FilingSection(date="2025-01-01", form="10-K", text="A. B old.")]
+    monkeypatch.setattr(ed, "fetch_sections", lambda s, **k: secs)
+    assert edgar_svc.get_filing_diff("AAPL", section="business").ok is True
+
+    # Expire cache + fail the fetch → serve stale content but with ok=False + error.
+    monkeypatch.setattr(edgar_svc.mc, "fresh_enough", lambda *a, **k: False)
+    monkeypatch.setattr(ed, "fetch_sections", lambda s, **k: (_ for _ in ()).throw(RuntimeError("edgar down")))
+    r = edgar_svc.get_filing_diff("AAPL", section="business")
+    assert r.ok is False and "edgar down" in r.error and r.new_date == "2026-01-01"  # stale content served
+
+
+def test_filing_diff_non_us_empty(db, monkeypatch):
+    from lucore.data import edgar as ed
+    from lucore.services import edgar_svc
+
+    monkeypatch.setattr(ed, "fetch_sections", lambda s, **k: (_ for _ in ()).throw(AssertionError("no fetch")))
+    r = edgar_svc.get_filing_diff("0700.HK")
+    assert r.ok and r.diff.changed is False
+
+
 def test_filings_service_roundtrip(db, monkeypatch):
     from lucore.data import edgar as ed
     from lucore.services import edgar_svc

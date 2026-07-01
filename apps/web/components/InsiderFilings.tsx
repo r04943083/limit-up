@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Panel from "@/components/Panel";
-import { getInsiders, getFilings, type InsiderReport, type FilingRow } from "@/lib/api";
+import {
+  getInsiders, getFilings, getFilingDiff,
+  type InsiderReport, type FilingRow, type FilingDiffResult,
+} from "@/lib/api";
 import { num, compact, dirClass, errText } from "@/lib/format";
 import { isUS } from "@/lib/market";
 
@@ -115,6 +118,58 @@ export default function InsiderFilings({ symbol }: { symbol: string }) {
           </ul>
         )}
       </Panel>
+
+      <FilingDiffBlock symbol={symbol} />
     </>
+  );
+}
+
+const SECTIONS: { key: string; label: string }[] = [
+  { key: "risk_factors", label: "风险因素" },
+  { key: "management_discussion", label: "MD&A" },
+  { key: "business", label: "业务" },
+];
+
+// 10-K red-line diff of a narrative section between the two most recent filings. Parsing two
+// 10-Ks is slow, so this is button-triggered (not auto-loaded).
+function FilingDiffBlock({ symbol }: { symbol: string }) {
+  const [section, setSection] = useState("risk_factors");
+  const [data, setData] = useState<FilingDiffResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const run = (sec: string) => {
+    setSection(sec); setBusy(true); setErr(null); setData(null);
+    getFilingDiff(symbol, "10-K", sec)
+      .then((d) => { setData(d); if (!d.ok) setErr(d.error || "无法生成对比"); })
+      .catch((e) => setErr(errText(e)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <Panel title="10-K 红线对比" hint={data?.ok ? `${data.old_date} → ${data.new_date} · +${data.diff.added_count}/-${data.diff.removed_count}` : "两期年报章节变化"}>
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        {SECTIONS.map((s) => (
+          <button key={s.key} onClick={() => run(s.key)} disabled={busy}
+            className={`px-2.5 py-1 rounded text-xs disabled:opacity-40 ${s.key === section && (data || busy) ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-ink border border-line"}`}>
+            {s.label}
+          </button>
+        ))}
+        <span className="text-[11px] text-ink-faint ml-1">SEC 首次抓取较慢</span>
+      </div>
+      {busy ? <p className="text-sm text-ink-faint py-4 text-center">对比中…(解析两期 10-K)</p>
+        : err ? <p className="text-sm text-ink-faint py-4 text-center">{err}</p>
+        : !data ? <p className="text-sm text-ink-faint py-2">选择章节对比最近两期年报的措辞变化。</p>
+        : !data.diff.changed ? <p className="text-sm text-ink-faint py-2">该章节与上期基本一致。</p>
+        : (
+          <div className="max-h-96 overflow-auto text-sm leading-relaxed space-y-1">
+            {data.diff.chunks.map((c, i) => {
+              if (c.op === "added") return <p key={i} className="bg-accent/10 text-accent rounded px-1.5 py-0.5">＋ {c.text}</p>;
+              if (c.op === "removed") return <p key={i} className="text-ink-faint line-through px-1.5">－ {c.text}</p>;
+              return <p key={i} className="text-ink-dim px-1.5">{c.text}</p>;
+            })}
+          </div>
+        )}
+    </Panel>
   );
 }

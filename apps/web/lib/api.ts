@@ -326,6 +326,16 @@ export type FilingsResult = { ok: boolean; error: string | null; filings: Filing
 export const getInsiders = (s: string) => get<InsiderResult>(`/stocks/${s}/insiders`);
 export const getFilings = (s: string) => get<FilingsResult>(`/stocks/${s}/filings`);
 
+// ---- 10-K/10-Q section red-line diff (two most recent filings) ----
+export type DiffChunk = { op: "same" | "added" | "removed"; text: string };
+export type TextDiff = { chunks: DiffChunk[]; added_count: number; removed_count: number; changed: boolean };
+export type FilingDiffResult = {
+  ok: boolean; error: string | null; symbol: string; form: string;
+  section: string; section_label: string; old_date: string | null; new_date: string | null; diff: TextDiff;
+};
+export const getFilingDiff = (s: string, form = "10-K", section = "risk_factors") =>
+  get<FilingDiffResult>(`/stocks/${s}/filing-diff?form=${form}&section=${section}`);
+
 export type AnalysisResult = {
   summary: string;
   recommendation: string;

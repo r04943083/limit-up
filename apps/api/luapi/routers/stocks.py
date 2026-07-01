@@ -187,3 +187,9 @@ def insiders(symbol: str) -> edgar_svc.InsiderResult:
 def filings(symbol: str) -> edgar_svc.FilingsResult:
     """SEC 申报流水(10-K/10-Q/8-K/4/…),cache-first。非美股返回空。"""
     return edgar_svc.get_filings(symbol.upper())
+
+
+@router.get("/{symbol}/filing-diff", response_model=edgar_svc.FilingDiffResult)
+def filing_diff(symbol: str, form: str = "10-K", section: str = "risk_factors") -> edgar_svc.FilingDiffResult:
+    """两期 10-K/10-Q 指定章节(风险因素/MD&A/业务)的红线 diff,cache-first。非美股返回空。"""
+    return edgar_svc.get_filing_diff(symbol.upper(), form=form, section=section)

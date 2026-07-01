@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from ..compute.textdiff import TextDiff, diff_text
 from ..data import edgar as ed
 from ..markets import Market, infer_market
 from . import market_cache as mc
@@ -75,3 +76,52 @@ def get_filings(symbol: str) -> FilingsResult:
             return FilingsResult(ok=False, error=str(e),
                                  filings=_FilingsCache.model_validate_json(cached).filings)
         return FilingsResult(ok=False, error=str(e), filings=[])
+
+
+class FilingDiffResult(BaseModel):
+    ok: bool = True
+    error: str | None = None
+    symbol: str
+    form: str = "10-K"
+    section: str = "risk_factors"
+    section_label: str = ""
+    old_date: str | None = None
+    new_date: str | None = None
+    diff: TextDiff = TextDiff()
+
+
+def get_filing_diff(symbol: str, *, form: str = "10-K", section: str = "risk_factors") -> FilingDiffResult:
+    """Red-line diff of a narrative section (e.g. Risk Factors) between the two most recent
+    filings of ``form``. US-only, cache-first (annual/quarterly filings change slowly)."""
+    sym = symbol.upper()
+    label = ed.SECTIONS.get(section, section)
+    if section not in ed.SECTIONS:
+        return FilingDiffResult(ok=False, error="unknown section", symbol=sym, form=form, section=section)
+    if not _is_us(sym):
+        return FilingDiffResult(ok=True, symbol=sym, form=form, section=section, section_label=label)
+    key = f"filingdiff:{sym}:{form}:{section}"
+    cached, fetched = mc.read(key)
+    if cached and mc.fresh_enough(fetched, is_today=True, today_ttl_min=_TTL_MIN):
+        return FilingDiffResult.model_validate_json(cached)
+    try:
+        secs = ed.fetch_sections(sym, form=form, section=section, n=2)
+        if len(secs) < 2 or not secs[0].text or not secs[1].text:
+            # Deterministic negative (this section won't diff today) — cache it so repeated
+            # clicks don't re-parse two 10-Ks each time just to get the same "can't diff".
+            degenerate = FilingDiffResult(ok=False, error="需要两期可解析的申报", symbol=sym,
+                                          form=form, section=section, section_label=label)
+            mc.write(key, degenerate.model_dump_json())
+            return degenerate
+        new, old = secs[0], secs[1]  # head() is newest-first
+        res = FilingDiffResult(
+            ok=True, symbol=sym, form=form, section=section, section_label=label,
+            old_date=old.date, new_date=new.date, diff=diff_text(old.text, new.text),
+        )
+        mc.write(key, res.model_dump_json())
+        return res
+    except Exception as e:  # noqa: BLE001 - transient fetch error: serve stale but flag ok=False
+        if cached:
+            stale = FilingDiffResult.model_validate_json(cached)
+            return stale.model_copy(update={"ok": False, "error": str(e)})
+        return FilingDiffResult(ok=False, error=str(e), symbol=sym, form=form,
+                                section=section, section_label=label)
