@@ -1,6 +1,9 @@
 """Strategy backtester: deterministic behavior on synthetic price series."""
 import datetime as dt
 
+import pytest
+from pydantic import ValidationError
+
 from lucore.compute.backtest import StrategySpec, backtest
 from lucore.data.base import Bar
 
@@ -37,3 +40,17 @@ def test_flat_series_no_trades_no_drawdown():
     assert r.stats.trades == 0
     assert r.stats.max_drawdown_pct == 0.0
     assert abs(r.stats.total_return_pct) < 1e-9
+
+
+def test_degenerate_windows_are_rejected():
+    # Zero-width windows would make the rolling max/min slice empty (ValueError) or divide
+    # RSI by zero — reject them at validation so the strategy can't be constructed.
+    for bad in (
+        {"kind": "breakout", "lookback": 0},
+        {"kind": "breakout", "exit_lookback": 0},
+        {"kind": "rsi", "rsi_period": 0},
+        {"kind": "ma_cross", "fast": 0},
+        {"kind": "ma_cross", "slow": 0},
+    ):
+        with pytest.raises(ValidationError):
+            StrategySpec(**bad)

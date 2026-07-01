@@ -82,20 +82,29 @@ def technical(symbol: str, period: str = "1y", interval: str = "1d") -> Technica
 @router.get("/{symbol}/financials", response_model=Financials)
 def financials(symbol: str) -> Financials:
     """Curated financial statements (annual + quarterly), cache-first (~weekly refresh)."""
-    return get_financials_cached(symbol.upper())
+    try:
+        return get_financials_cached(symbol.upper())
+    except Exception as e:  # noqa: BLE001 - throttled/never-synced → 502, not a raw 500
+        raise HTTPException(status_code=502, detail=f"financials error: {e}") from e
 
 
 @router.get("/{symbol}/profile", response_model=CompanyProfile)
 def profile(symbol: str) -> CompanyProfile:
     """Company overview + dividend history + ownership, cache-first (~weekly refresh)."""
-    return get_profile_cached(symbol.upper())
+    try:
+        return get_profile_cached(symbol.upper())
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"profile error: {e}") from e
 
 
 @router.get("/{symbol}/valuation", response_model=ValuationOut)
 def valuation(symbol: str) -> ValuationOut:
     """Futu-style 历史估值带 (PE/PB/PS bands + 平均/分位) + analyst consensus.
     Rebuilt deterministically from cached daily closes ÷ reported quarterly per-share figures."""
-    return get_valuation(symbol.upper())
+    try:
+        return get_valuation(symbol.upper())
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"valuation error: {e}") from e
 
 
 @router.get("/{symbol}/dcf", response_model=DcfView)
@@ -107,8 +116,11 @@ def dcf_view(
     years: int | None = None,
 ) -> DcfView:
     """Two-stage DCF intrinsic value. Omit params to use sensible defaults (growth from FCF CAGR)."""
-    return compute_dcf(symbol.upper(), growth=growth, discount=discount,
-                       terminal_growth=terminal, years=years)
+    try:
+        return compute_dcf(symbol.upper(), growth=growth, discount=discount,
+                           terminal_growth=terminal, years=years)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"dcf error: {e}") from e
 
 
 @router.post("/{symbol}/analyze", response_model=SavedAnalysis)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
 import Heatmap from "@/components/Heatmap";
@@ -28,11 +28,19 @@ export default function DashboardPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     getBriefing().then(setB).catch(() => {});
     getIndices().then(setIndices).catch(() => {});
     getOverview().then(setOverview).catch(() => {});
   }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Reload the dashboard's indices/overview/briefing when the footer "↻ 全部更新" fires.
+  useEffect(() => {
+    const h = () => refresh();
+    window.addEventListener("lu:synced", h);
+    return () => window.removeEventListener("lu:synced", h);
+  }, [refresh]);
 
   const generate = () => {
     setBusy(true); setErr(null);
@@ -43,7 +51,12 @@ export default function DashboardPage() {
   const dist = useMemo(() =>
     BUCKETS.map((bk) => ({
       ...bk,
-      count: withPct.filter((r) => (r.change_pct ?? 0) > bk.lo && (r.change_pct ?? 0) <= bk.hi).length,
+      // Exactly-0 (unchanged) belongs to NEITHER side — the sign guard keeps it out of the
+      // green "-3~0" bar so the histogram agrees with the up/down tallies below (both strict).
+      count: withPct.filter((r) => {
+        const v = r.change_pct ?? 0;
+        return v > bk.lo && v <= bk.hi && (bk.up ? v > 0 : v < 0);
+      }).length,
     })), [withPct]);
   const maxCount = Math.max(1, ...dist.map((d) => d.count));
   const upCount = withPct.filter((r) => (r.change_pct ?? 0) > 0).length;

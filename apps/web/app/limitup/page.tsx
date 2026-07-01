@@ -34,6 +34,11 @@ function toSymbol(code: string): string | null {
   if (/^[03]/.test(code)) return `${code}.SZ`;
   return null;
 }
+// 北交所 (8/4 开头) 无 yfinance 数据 → 不可跳研究页。用它决定是否渲染可点击样式,
+// 避免出现「看起来能点、点了没反应」的死点击。
+function canOpen(code: string): boolean {
+  return toSymbol(code) != null;
+}
 
 export default function LimitUpPage() {
   const router = useRouter();
@@ -202,7 +207,7 @@ export default function LimitUpPage() {
                 <tbody>
                   {stocks.map((s) => (
                     <tr key={s.code} onClick={() => open(s.code)}
-                      className="border-b border-line/50 hover:bg-panel-2/40 cursor-pointer">
+                      className={`border-b border-line/50 ${canOpen(s.code) ? "hover:bg-panel-2/40 cursor-pointer" : ""}`}>
                       <td className="py-1.5 pr-3 whitespace-nowrap">
                         <span className="text-ink">{s.name}</span>
                         <span className="text-ink-faint text-xs ml-2">{s.code}</span>
@@ -246,7 +251,7 @@ export default function LimitUpPage() {
                 <tbody>
                   {lhb.rows.map((r, i) => (
                     <tr key={`${r.code}-${i}`} onClick={() => open(r.code)}
-                      className="border-b border-line/50 hover:bg-panel-2/40 cursor-pointer">
+                      className={`border-b border-line/50 ${canOpen(r.code) ? "hover:bg-panel-2/40 cursor-pointer" : ""}`}>
                       <td className="py-1.5 pr-3 whitespace-nowrap">
                         <span className="text-ink">{r.name}</span>
                         <span className="text-ink-faint text-xs ml-2">{r.code}</span>
@@ -284,9 +289,12 @@ function Ladder({ tiers, onOpen }: { tiers: [number, LimitUpStock[]][]; onOpen: 
             </div>
             <div className="space-y-1 max-h-[22rem] overflow-y-auto no-scrollbar pr-0.5">
               {list.map((s) => (
-                <button key={s.code} onClick={() => onOpen(s.code)}
+                <button key={s.code} onClick={() => onOpen(s.code)} disabled={!canOpen(s.code)}
                   className={`w-full text-left rounded-md border px-2 py-1 transition-colors ${
-                    hi ? "border-up/30 bg-up/5 hover:bg-up/10" : "border-line bg-panel hover:bg-panel-2/60"
+                    !canOpen(s.code) ? "cursor-default" : ""
+                  } ${
+                    hi ? `border-up/30 bg-up/5 ${canOpen(s.code) ? "hover:bg-up/10" : ""}`
+                       : `border-line bg-panel ${canOpen(s.code) ? "hover:bg-panel-2/60" : ""}`
                   }`}>
                   <div className="text-[12px] text-ink truncate">{s.name}</div>
                   <div className="text-[10px] text-ink-faint flex items-center justify-between gap-1">

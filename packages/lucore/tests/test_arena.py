@@ -68,6 +68,41 @@ def test_equity_curve_marks_to_cached_closes(db):
     assert eqs[dt.date(2024, 1, 5)] == 100400.0
 
 
+def test_equity_curve_falls_back_to_snapshot_price_when_no_bars(db):
+    """A symbol with a snapshot price but NO cached daily bars must be valued at the snapshot
+    price, not 0 — otherwise a fully-deployed AI account shows ≈ −100% and misranks."""
+    import datetime as dt
+
+    from lucore.data.base import Fundamentals, Quote
+    from lucore.db import session_scope
+    from lucore.db.models import PaperAccount, PaperTrade
+    from lucore.services import arena
+    from lucore.services.research import ResearchBundle, save_snapshot
+
+    # Snapshot with a price, but we deliberately write NO PriceBar rows for BBB.
+    save_snapshot(ResearchBundle(
+        symbol="BBB", market="US",
+        quote=Quote(symbol="BBB", market="US", price=25.0, currency="USD", name="B Co"),
+        fundamentals=Fundamentals(symbol="BBB", market="US", name="B Co", currency="USD"),
+        technical_latest={}, technical_trend="flat", technical_signals=[], news=[], spark=[],
+        generated_at=dt.datetime.now(dt.timezone.utc),
+    ))
+    with session_scope() as s:
+        acct = PaperAccount(name="t2", cash=100000.0, starting_cash=100000.0, kind="ai", persona="lynch")
+        s.add(acct)
+        s.flush()
+        aid = acct.id
+        # Deploy nearly all cash into BBB: 1000 @ 20 -> cash 80000, 1000 shares.
+        s.add(PaperTrade(account_id=aid, symbol="BBB", side="buy", quantity=1000, price=20,
+                         created_at=dt.datetime(2024, 1, 1, 10, 0)))
+
+    master = [dt.date(2024, 1, d) for d in range(1, 4)]
+    curve = arena.equity_curve(aid, master)
+    eqs = {d: e for d, e in curve}
+    # Without the fallback this collapses to cash (80000); with it: 80000 + 1000*25 = 105000.
+    assert eqs[dt.date(2024, 1, 1)] == 105000.0
+
+
 def test_equity_curve_empty_without_trades(db):
     from lucore.db import session_scope
     from lucore.db.models import PaperAccount

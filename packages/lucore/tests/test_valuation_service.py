@@ -108,3 +108,19 @@ def test_get_valuation_handles_missing_statements(monkeypatch):
     assert v.pe.points == [] and v.pe.current == 12.0
     assert v.pb.points == [] and v.ps.points == []
     assert v.analyst.upside_pct is not None  # consensus independent of statements
+
+
+def test_get_valuation_without_shares_skips_ps_pb_bands(monkeypatch):
+    """Statements are present but shares outstanding is unknown: PS/PB per-share can't be
+    derived, so those bands must be EMPTY — never built from close ÷ raw total (garbage 分位).
+    PE is EPS-based (already per-share) and still works."""
+    no_shares = _fake_financials().model_copy(update={"shares": None})
+    monkeypatch.setattr(vsvc, "get_research", lambda s: _fake_bundle())
+    monkeypatch.setattr(vsvc, "get_financials_cached", lambda s: no_shares)
+    monkeypatch.setattr(vsvc, "read_bars", lambda s, interval="1d": _fake_bars())
+    _patch_extras(monkeypatch)
+
+    v = vsvc.get_valuation("test")
+    assert [p.value for p in v.pe.points] == [12.0, 13.0]  # EPS-based, unaffected
+    assert v.ps.points == [] and v.pb.points == []          # not fabricated from totals
+    assert v.ps.current == 1.5 and v.pb.current == 2.0       # current still from fundamentals

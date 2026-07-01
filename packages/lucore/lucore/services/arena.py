@@ -324,6 +324,19 @@ def _close_on_or_before(dates: list[dt.date], closes: list[float], d: dt.date) -
     return closes[i] if i >= 0 else None
 
 
+def _snapshot_price(symbol: str) -> float | None:
+    """Snapshot-only last price (no live fetch, unlike ``_cache_price``). Used to value
+    bar-less holdings on the equity-curve render path without ever hitting the network."""
+    with session_scope() as s:
+        snap = s.get(Snapshot, symbol)
+        if snap and snap.bundle_json:
+            try:
+                return ResearchBundle.model_validate_json(snap.bundle_json).quote.price
+            except Exception:  # noqa: BLE001
+                return None
+    return None
+
+
 def equity_curve(account_id: int, master_dates: list[dt.date]) -> list[tuple[dt.date, float]]:
     """Reconstruct the account's daily equity over ``master_dates`` from the trade ledger
     + cached daily closes. Cash changes on trade dates; positions are marked to the close
@@ -334,7 +347,13 @@ def equity_curve(account_id: int, master_dates: list[dt.date]) -> list[tuple[dt.
     trades = sorted(trades, key=lambda t: (t.created_at or dt.datetime.min, t.id))
     tdates = [((t.created_at.date() if t.created_at else dt.date.today()), t) for t in trades]
     first = tdates[0][0]
-    bars = {sym: _bar_index(sym) for sym in {t.symbol for t in trades}}
+    syms = {t.symbol for t in trades}
+    bars = {sym: _bar_index(sym) for sym in syms}
+    # Symbols with a snapshot but NO cached daily bars would otherwise mark at 0, dragging
+    # the curve (and the leaderboard return derived from it) to ≈ −100%. Fall back to the
+    # snapshot price — snapshot-only (never a live fetch: this is the render hot path) and
+    # only for genuinely bar-less symbols, so symbols with bars keep their historical marks.
+    fallback = {sym: _snapshot_price(sym) for sym in syms if not bars[sym][0]}
 
     dates = sorted({d for d in master_dates if d >= first} | {td for td, _ in tdates})
     if not dates:
@@ -356,7 +375,7 @@ def equity_curve(account_id: int, master_dates: list[dt.date]) -> list[tuple[dt.
             if qty <= 1e-9:
                 continue
             ds, cs = bars.get(sym, ([], []))
-            c = _close_on_or_before(ds, cs, d)
+            c = _close_on_or_before(ds, cs, d) or fallback.get(sym)
             if c:
                 mv += qty * c
         curve.append((d, round(cash + mv, 2)))

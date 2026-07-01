@@ -131,7 +131,11 @@ def import_csv(portfolio_id: int, csv_text: str) -> int:
         return 0  # need a symbol column for holdings import
     qty_i = next((i for i, h in enumerate(header) if h in _QTY), None)
     cost_i = next((i for i, h in enumerate(header) if h in _COST), None)
-    added = 0
+    # Aggregate multiple lots of the same symbol (common in IBKR/Futu exports): sum the
+    # shares and take a share-weighted average cost, so a second lot doesn't overwrite the
+    # first. `added` counts distinct symbols actually written, not raw rows.
+    lots: dict[str, dict[str, float]] = {}
+    order: list[str] = []
     for r in rows[1:]:
         if sym_i >= len(r):
             continue
@@ -140,9 +144,20 @@ def import_csv(portfolio_id: int, csv_text: str) -> int:
             continue
         qty = _num(r[qty_i]) if qty_i is not None and qty_i < len(r) else None
         cost = _num(r[cost_i]) if cost_i is not None and cost_i < len(r) else None
-        upsert_holding(portfolio_id, sym, qty or 0.0, cost, source="csv")
-        added += 1
-    return added
+        if sym not in lots:
+            lots[sym] = {"qty": 0.0, "cost_num": 0.0, "cost_qty": 0.0}
+            order.append(sym)
+        lot = lots[sym]
+        q = qty or 0.0
+        lot["qty"] += q
+        if cost is not None and q > 0:
+            lot["cost_num"] += cost * q
+            lot["cost_qty"] += q
+    for sym in order:
+        lot = lots[sym]
+        avg_cost = lot["cost_num"] / lot["cost_qty"] if lot["cost_qty"] > 0 else None
+        upsert_holding(portfolio_id, sym, lot["qty"], avg_cost, source="csv")
+    return len(order)
 
 
 def get_analytics(portfolio_id: int, base_currency: str = "USD") -> PortfolioAnalytics:

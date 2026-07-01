@@ -32,3 +32,24 @@ test("选股页:筛选条件 + 灌入面板 + 运行结果", async ({ page }) =>
   await page.waitForTimeout(500);
   expectClean(w);
 });
+
+test("选股页:AI 预设浮出可移除的行业筛选芯片(不再是隐藏粘性筛选)", async ({ page }) => {
+  const w = watch(page);
+  await page.goto("/screener");
+
+  await expect(page.getByRole("heading", { name: "预设策略" })).toBeVisible({ timeout: 10_000 });
+  // The AI / 科技成长 preset is the only one that sets a sector filter (Technology).
+  // (Preset buttons render label + hint, so match on a substring.)
+  await page.getByRole("button", { name: /AI \/ 科技成长/ }).click();
+
+  // That sector filter must now be VISIBLE as a removable chip (was hidden + sticky before).
+  const chip = page.getByRole("button", { name: /Technology ✕/ });
+  await expect(chip).toBeVisible({ timeout: 15_000 });
+
+  // Clicking the chip clears the constraint.
+  await chip.click();
+  await expect(chip).toHaveCount(0);
+
+  await page.waitForTimeout(300);
+  expectClean(w);
+});

@@ -67,7 +67,8 @@ def _yi(v: float | None) -> float | None:
 
 
 def gather_facts(date: str) -> dict:
-    pool = get_limit_up_pool(date).pool
+    lu = get_limit_up_pool(date)
+    pool = lu.pool
     lhb = get_dragon_tiger(date).data
     hsgt = get_hsgt_summary().summary
 
@@ -86,6 +87,7 @@ def gather_facts(date: str) -> dict:
 
     return {
         "date": date,
+        "_pool_ok": lu.ok,
         "zt_count": pool.count,
         "ladder": {f"{b}连板" if b >= 2 else "首板": n for b, n in sorted(tiers.items(), reverse=True)},
         "max_boards": max_boards,
@@ -128,6 +130,7 @@ def compute_zt_review(
             return cached
 
     facts = gather_facts(date)
+    pool_ok = facts.pop("_pool_ok", True)
     provider = provider or get_provider()
 
     if facts["zt_count"] == 0:
@@ -135,6 +138,14 @@ def compute_zt_review(
             sentiment="该日无涨停数据",
             summary="该日无涨停股(可能为非交易日或数据源尚未更新)。",
         )
+        # A *failed* limit-up fetch also yields count==0. Never persist that — it would
+        # poison the day's review cache and be served forever. Return an ephemeral result
+        # so the next call (once akshare recovers) recomputes from real data.
+        if not pool_ok:
+            return SavedZtReview(
+                date=date, provider="cache-miss",
+                created_at=dt.datetime.now(dt.timezone.utc), result=result, facts=facts,
+            )
     else:
         prompt = (
             "Write today's 涨停复盘. FACTS (ground truth):\n"

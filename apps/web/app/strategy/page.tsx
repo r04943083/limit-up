@@ -64,7 +64,9 @@ export default function StrategyPage() {
   const explain = () => {
     if (!result) return;
     setReading(true);
-    explainBacktest(result.symbol, spec)
+    // Explain the spec that PRODUCED the shown result, not the live-edited `spec` — otherwise
+    // the AI narrates a different strategy than the equity curve/stats on screen.
+    explainBacktest(result.symbol, result.spec)
       .then(setRead).catch((e) => setErr(String(e))).finally(() => setReading(false));
   };
 

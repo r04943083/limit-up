@@ -1,9 +1,27 @@
 """Futu .ebk parsing — pin symbol normalization and non-equity skipping."""
-from lucore.services.futu_import import parse_ebk, to_futu_line
+import pytest
+
+from lucore.services.futu_import import import_ebk_files, parse_ebk, to_futu_line
 
 
 def _by_raw(rows):
     return {r.raw: r for r in rows}
+
+
+@pytest.fixture()
+def db(tmp_path, monkeypatch):
+    monkeypatch.setenv("LU_DATA_DIR", str(tmp_path))
+    from lucore.config import get_settings
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]
+    import lucore.db.session as session_mod
+
+    session_mod._engine = None
+    session_mod._SessionLocal = None
+    from lucore.db import init_db
+
+    init_db()
+    yield
 
 
 def test_export_reverses_import():
@@ -69,3 +87,19 @@ def test_handles_bom_and_blank_lines():
     rows = parse_ebk("﻿31#AAPL\r\n\r\n74#02007\r\n")
     syms = [r.symbol for r in rows if r.symbol]
     assert syms == ["AAPL", "2007.HK"]
+
+
+def test_reimport_reports_zero_added(db):
+    # Re-importing the same .ebk must report added=0, not re-count already-present symbols.
+    files = [{"name": "科技.ebk", "content": "31#NVDA\n31#AAPL\n74#00700\n"}]
+
+    first = import_ebk_files(files)
+    assert first.total_added == 3
+
+    second = import_ebk_files(files)
+    assert second.total_added == 0                 # nothing new on re-import
+    assert second.groups[0].added == 0
+    # And the group still holds exactly the 3 originals (no duplicates).
+    from lucore.services.watchlist import get_watchlist
+    wl = get_watchlist(second.groups[0].watchlist_id)
+    assert len(wl.items) == 3

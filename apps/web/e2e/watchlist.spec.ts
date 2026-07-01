@@ -40,11 +40,17 @@ test("自选页:列排序 + 可定制副指标列 + 分时", async ({ page }) =>
   await page.getByRole("button", { name: /名称\/代码/ }).click(); // sort by name
   await expect(page.getByRole("button", { name: /最新·涨跌/ })).toBeVisible();
 
-  // Customizable secondary metric: open the selector and switch to 换手率.
-  const metricBtn = page.locator('button[title="选择副指标 / 排序"]');
+  // Opening the metric picker (caret) must NOT also flip the sort — the label-sort and the
+  // menu-caret are now separate controls (regression guard for the coupled-header bug).
+  const arrowBefore = await page.getByRole("button", { name: /最新·涨跌/ }).textContent();
+  const metricBtn = page.locator('button[title="选择副指标"]');
   await metricBtn.click();
   const metricMenu = page.locator("div.z-40.w-28");
   await expect(metricMenu).toBeVisible();
+  const arrowAfter = await page.getByRole("button", { name: /最新·涨跌/ }).textContent();
+  expect(arrowAfter).toBe(arrowBefore); // sort direction unchanged by opening the picker
+
+  // Customizable secondary metric: switch to 换手率.
   await metricMenu.getByText("换手率", { exact: true }).click();
   await expect(metricMenu).toBeHidden();
 

@@ -19,6 +19,7 @@ export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ title: "", body: "", symbol: "", action: "note", conviction: "medium" });
 
   const load = useCallback(() => {
@@ -27,15 +28,17 @@ export default function JournalPage() {
   useEffect(() => { load(); }, [load]);
 
   const submit = () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim() || saving) return;  // in-flight guard: a double-click must not create two entries
     setErr(null);
+    setSaving(true);
     addJournal({
       title: form.title, body: form.body || undefined,
       symbol: form.symbol.trim().toUpperCase() || undefined,
       action: form.action, conviction: form.conviction,
     })
       .then(() => { setForm({ title: "", body: "", symbol: "", action: "note", conviction: "medium" }); load(); })
-      .catch((e) => setErr(String(e)));
+      .catch((e) => setErr(String(e)))
+      .finally(() => setSaving(false));
   };
 
   const review = (id: number) => {
@@ -83,9 +86,9 @@ export default function JournalPage() {
           rows={3}
           className="mt-3 w-full rounded-lg bg-panel-2 border border-line px-3 py-2 text-sm outline-none focus:border-accent" />
         <div className="mt-3 flex justify-end">
-          <button onClick={submit} disabled={!form.title.trim()}
+          <button onClick={submit} disabled={!form.title.trim() || saving}
             className="rounded-lg bg-accent/15 text-accent text-sm font-medium px-4 py-2 hover:bg-accent/25 disabled:opacity-40">
-            添加记录
+            {saving ? "添加中…" : "添加记录"}
           </button>
         </div>
       </Panel>

@@ -19,16 +19,16 @@ STRATEGIES = ["rsi", "ma_cross", "breakout"]
 class StrategySpec(BaseModel):
     kind: str = "ma_cross"  # rsi | ma_cross | breakout
     # rsi
-    rsi_period: int = 14
+    rsi_period: int = Field(14, ge=1)
     rsi_buy: float = 30.0
     rsi_sell: float = 70.0
     # ma_cross
-    fast: int = 20
-    slow: int = 50
-    # breakout
-    lookback: int = 20
-    exit_lookback: int = 10
-    starting_cash: float = 10_000.0
+    fast: int = Field(20, ge=1)
+    slow: int = Field(50, ge=1)
+    # breakout — windows must be ≥1 or the rolling max/min slices are empty (ValueError)
+    lookback: int = Field(20, ge=1)
+    exit_lookback: int = Field(10, ge=1)
+    starting_cash: float = Field(10_000.0, gt=0)
 
 
 class BacktestPoint(BaseModel):

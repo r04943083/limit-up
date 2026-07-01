@@ -71,7 +71,10 @@ def health_score(
 
     # 4) 52-week range position (higher = nearer highs, momentum-positive but capped)
     if price and week52_low is not None and week52_high and week52_high > week52_low:
-        pos = (price - week52_low) / (week52_high - week52_low)  # 0..1
+        # Clamp to [0,1] so the sub-score stays inside its intended 40..90 band: today's price
+        # can print above the *cached* 52w high (a fresh high not yet in the stored range,
+        # which would push it past 90) or below the cached low (would drop it under 40).
+        pos = max(0.0, min(1.0, (price - week52_low) / (week52_high - week52_low)))
         parts.append(40.0 + pos * 50.0)  # map to 40..90
         if pos >= 0.9:
             factors.append("near 52w high")

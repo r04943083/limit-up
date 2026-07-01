@@ -230,6 +230,20 @@ export default function ScreenerPage() {
             </button>
           ))}
           <span className="text-xs text-ink-faint">{markets.length === 0 ? "(全部)" : ""}</span>
+          {/* Presets (e.g. AI / 科技成长) set a sector filter that otherwise has no on-screen
+              control — surface it as a removable chip so results aren't silently constrained. */}
+          {sectors.length > 0 && (
+            <>
+              <span className="text-xs text-ink-faint ml-2 mr-0.5">行业</span>
+              {sectors.map((sec) => (
+                <button key={sec} onClick={() => { setActivePreset(null); setSectors((xs) => xs.filter((x) => x !== sec)); }}
+                  title="点击移除该行业限制"
+                  className="px-2.5 py-1 rounded-lg text-xs border border-accent text-accent bg-accent/10 hover:bg-accent/20">
+                  {sec} ✕
+                </button>
+              ))}
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-1">

@@ -50,6 +50,14 @@ export default function StockPage({ symbol }: { symbol: string | null }) {
     syncSymbol(symbol).then(() => setReloadKey((k) => k + 1)).catch(() => {}).finally(() => setSyncing(false));
   }, [symbol]);
 
+  // A global "↻ 全部更新" (footer) freshens the cache for every symbol — reload this page's
+  // quote/chart too, so the terminal you're looking at doesn't stay stale.
+  useEffect(() => {
+    const h = () => setReloadKey((k) => k + 1);
+    window.addEventListener("lu:synced", h);
+    return () => window.removeEventListener("lu:synced", h);
+  }, []);
+
   if (!symbol) {
     return (
       <div className="flex-1 grid place-items-center text-ink-faint text-sm">

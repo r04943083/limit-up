@@ -61,11 +61,14 @@ def build_research_bundle(symbol: str, news_limit: int = 6) -> ResearchBundle:
     return bundle
 
 
-def _fundamentals_empty(f: Fundamentals) -> bool:
-    """A snapshot whose fundamentals are all-None — the tell-tale of a rate-limited fetch
-    (the price endpoint succeeds but `.info` gets throttled). We never let one of these
-    clobber a previously-good snapshot."""
-    return f.name is None and f.pe_ttm is None and f.roe is None and f.market_cap is None
+def _fundamentals_throttled(f: Fundamentals) -> bool:
+    """The rate-limit signature: yfinance's `.info` came back empty, so market cap AND
+    trailing PE AND ROE are *all* absent at once — a healthy fetch of a real equity never
+    is. We deliberately require all three (not just any None) so that a single field going
+    None for a legitimate reason — a dividend cut clearing `dividend_yield`, a swing to a
+    loss clearing `pe_ttm`, dropped analyst coverage clearing `target_mean` — is NOT mistaken
+    for a throttle and is allowed to overwrite the stale cached value."""
+    return f.market_cap is None and f.pe_ttm is None and f.roe is None
 
 
 def save_snapshot(bundle: ResearchBundle) -> None:
@@ -83,13 +86,28 @@ def save_snapshot(bundle: ResearchBundle) -> None:
         if snap is None:
             snap = Snapshot(symbol=bundle.symbol)
             s.add(snap)
-        elif snap.bundle_json and _fundamentals_empty(bundle.fundamentals):
+        elif snap.bundle_json and (
+            _fundamentals_throttled(bundle.fundamentals) or bundle.quote.price is None
+        ):
+            # Only pay the extra read/parse when the fresh fetch looks degraded (throttled
+            # fundamentals or a priceless quote); a healthy fetch skips this entirely.
             try:
                 prev = ResearchBundle.model_validate_json(snap.bundle_json)
             except Exception:  # noqa: BLE001
                 prev = None
-            if prev is not None and not _fundamentals_empty(prev.fundamentals):
-                bundle = bundle.model_copy(update={"fundamentals": prev.fundamentals})
+            if prev is not None:
+                update: dict = {}
+                # Throttled fundamentals → keep the whole prior good block rather than blank
+                # it. (Whole-block, not field-level: when the throttle signature fires we know
+                # the fetch is degraded, so we don't risk resurrecting a legitimately-cleared field.)
+                if _fundamentals_throttled(bundle.fundamentals) and not _fundamentals_throttled(prev.fundamentals):
+                    update["fundamentals"] = prev.fundamentals
+                # A quote that came back without a price (throttled) must not blank the
+                # last-good price/change either.
+                if bundle.quote.price is None and prev.quote.price is not None:
+                    update["quote"] = prev.quote
+                if update:
+                    bundle = bundle.model_copy(update=update)
         snap.bundle_json = bundle.model_dump_json()
         snap.synced_at = now
 

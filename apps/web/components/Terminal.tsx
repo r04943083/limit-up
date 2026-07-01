@@ -64,7 +64,15 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
     } else {
       Promise.all([getOhlcv(sym, k.period, k.interval), getTechnical(sym, k.period, k.interval)])
         .then(([o, t]) => { setOhlcv(o); setTa(t); })
-        .catch((e) => setErr(String(e)))
+        // A symbol with no cached bars yet returns 404 ("no price data") — that's an empty
+        // state, not a failure. Degrade to an empty chart instead of a red error banner;
+        // only surface genuine (5xx/network) errors.
+        .catch((e) => {
+          // 404 "no price data" = no cached bars yet → empty chart, not a red banner. Keep
+          // this narrow (404 only) so genuine 4xx/5xx failures still surface.
+          if (/\b404\b|no price data/i.test(String(e))) { setOhlcv([]); setTa(null); }
+          else setErr(String(e));
+        })
         .finally(() => setChartLoading(false));
     }
   }, [sym, kidx]);

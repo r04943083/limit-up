@@ -608,8 +608,10 @@ export type SavedZtReview = {
 };
 export const getZtReview = (date?: string) =>
   get<SavedZtReview | null>(`/cn/review${date ? `?date=${date}` : ""}`);
+// POST = the explicit "(重新)复盘" action → always force a fresh compute, otherwise the
+// cache-first backend would return the existing review and the button would be a no-op.
 export const runZtReview = (date?: string) =>
-  post<SavedZtReview>(`/cn/review${date ? `?date=${date}` : ""}`);
+  post<SavedZtReview>(`/cn/review?force=true${date ? `&date=${date}` : ""}`);
 
 // ---- #11 投资日志 Journal ----
 export type JournalReview = {

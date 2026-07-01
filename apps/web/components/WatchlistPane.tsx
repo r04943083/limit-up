@@ -108,6 +108,14 @@ export default function WatchlistPane({
   }, []);
   const persist = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
+  // The footer "↻ 全部更新" fires a global lu:synced after a full sync — bump localRefresh so
+  // the groups/quotes/health on screen reload from the freshened cache (was a no-op before).
+  useEffect(() => {
+    const h = () => setLocalRefresh((v) => v + 1);
+    window.addEventListener("lu:synced", h);
+    return () => window.removeEventListener("lu:synced", h);
+  }, []);
+
   // Price flash: remember the last price per symbol; flash a row when it changes.
   const prevPrice = useRef<Record<string, number>>({});
   const [flash, setFlash] = useState<Record<string, "up" | "down">>({});
@@ -326,11 +334,17 @@ export default function WatchlistPane({
       {/* Column header: name (sort) | metric selector (sort) | price·change (sort) */}
       <div className="relative grid grid-cols-[1fr_auto_auto] gap-2 px-3 h-7 items-center text-[10px] uppercase tracking-wide text-ink-faint border-b border-line/60 select-none">
         <button onClick={() => toggleSort("name")} className="text-left hover:text-ink">名称/代码{sortArrow("name")}</button>
-        <button onClick={() => { if (metric === "spark") toggleSort("change_pct"); else toggleSort(metric); setMetricMenu((v) => !v); }}
-          className="hover:text-ink flex items-center gap-0.5" title="选择副指标 / 排序">
-          {metric === "spark" ? "迷你图" : METRIC_LABEL[metric]}{sortArrow(metric === "spark" ? "change_pct" : metric)}
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
-        </button>
+        {/* Label click = sort by this column; caret click = open the metric picker. Keeping
+            them separate means opening the dropdown no longer also flips the sort direction. */}
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => { if (metric === "spark") toggleSort("change_pct"); else toggleSort(metric); }}
+            className="hover:text-ink flex items-center gap-0.5" title="按此列排序">
+            {metric === "spark" ? "迷你图" : METRIC_LABEL[metric]}{sortArrow(metric === "spark" ? "change_pct" : metric)}
+          </button>
+          <button onClick={() => setMetricMenu((v) => !v)} className="hover:text-ink" title="选择副指标" aria-label="选择副指标">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+        </div>
         <button onClick={() => toggleSort("price")} className="text-right hover:text-ink w-[78px]">最新·涨跌{sortArrow("price") || sortArrow("change_pct")}</button>
 
         {metricMenu && (

@@ -158,9 +158,12 @@ def get_valuation(symbol: str) -> ValuationOut:
     # in — a fiscal-year EPS forward-filled across the following calendar year (before the next
     # report) pins a stale denominator onto newer prices and inflates the ratio. Correct over
     # long: the band spans whatever the cached quarters support (see points[].date range).
+    # EPS is already per-share. Sales-/book-per-share need ÷ shares — if shares outstanding
+    # is unknown, DON'T fall back to the raw total (that builds a band from close÷total-revenue,
+    # ≈0, and makes the 分位 meaningless). Leave those bands empty instead.
     eps_pts = _points_from_ttm(fin.income_q, _EPS_LABEL)
-    sps_pts = _points_from_ttm(fin.income_q, _REVENUE_LABEL, divide_by=shares)
-    bvps_pts = _points_direct(fin.balance_q, _EQUITY_LABEL, divide_by=shares)
+    sps_pts = _points_from_ttm(fin.income_q, _REVENUE_LABEL, divide_by=shares) if shares else []
+    bvps_pts = _points_direct(fin.balance_q, _EQUITY_LABEL, divide_by=shares) if shares else []
 
     pe = valuation_band("PE", closes, eps_pts, current=fund.pe_ttm)
     pb = valuation_band("PB", closes, bvps_pts, current=fund.pb)

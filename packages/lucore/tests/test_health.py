@@ -33,3 +33,11 @@ def test_missing_data_defaults_to_neutral():
     h = health_score()
     assert h.score == 50.0
     assert h.label == "neutral"
+
+
+def test_new_high_above_cached_52w_range_is_clamped():
+    # Today's price prints above the cached 52w high (a fresh high not yet in the range).
+    # The 52w-position sub-score must clamp at its cap, not exceed it and inflate the score.
+    over = health_score(price=110, sma200=80, rsi=58, trend="uptrend", week52_low=60, week52_high=100)
+    at = health_score(price=100, sma200=80, rsi=58, trend="uptrend", week52_low=60, week52_high=100)
+    assert over.score == at.score  # clamped: a new-high price can't push it past the cap

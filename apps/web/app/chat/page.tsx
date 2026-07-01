@@ -29,7 +29,13 @@ export default function ChatPage() {
     setBusy(true);
     sendChat(msg)
       .then((r) => setTurns((t) => [...t, { id: Date.now() + 1, role: "assistant", content: r.reply, created_at: new Date().toISOString() }]))
-      .catch((e) => setErr(String(e).replace(/^Error:\s*/, "")))
+      .catch((e) => {
+        setErr(String(e).replace(/^Error:\s*/, ""));
+        // Roll back the optimistic bubble and restore the text so the turn can be retried,
+        // rather than leaving an orphaned user message that never gets an answer.
+        setTurns((t) => t.filter((x) => x.id !== optimistic.id));
+        setInput(msg);
+      })
       .finally(() => setBusy(false));
   };
 

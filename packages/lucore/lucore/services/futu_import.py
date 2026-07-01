@@ -21,7 +21,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ..markets import Market
-from .watchlist import add_item, create_watchlist, list_watchlists
+from .watchlist import add_item, create_watchlist, get_watchlist, list_watchlists
 
 
 class ParsedSymbol(BaseModel):
@@ -167,9 +167,17 @@ def import_ebk_files(files: list[dict]) -> EbkImportResult:
         wid = _watchlist_id_for(name)
         added = 0
         skipped: list[SkippedEntry] = []
+        # Count only symbols not already in the group — re-importing the same .ebk must
+        # report added=0, not N (add_item returns the existing item on dedupe).
+        wl = get_watchlist(wid)
+        present = {it.symbol for it in wl.items} if wl else set()
         for p in parsed:
             if p.kind == "equity" and p.symbol:
-                if add_item(wid, p.symbol, tags=name):
+                sym = p.symbol.strip().upper()
+                if sym in present:
+                    continue
+                if add_item(wid, sym, tags=name):
+                    present.add(sym)
                     added += 1
             else:
                 skipped.append(SkippedEntry(raw=p.raw, reason=p.skipped_reason or p.kind))
