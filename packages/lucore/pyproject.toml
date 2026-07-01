@@ -14,6 +14,7 @@ dependencies = [
     "cachetools>=5.3",
     "apscheduler>=3.10",
     "akshare>=1.18",
+    "edgartools>=3.0",       # SEC EDGAR: US financials + Form 4 insider + 13F institutional
 ]
 
 [project.optional-dependencies]

@@ -309,6 +309,23 @@ export type CompanyProfile = {
 };
 export const getProfile = (s: string) => get<CompanyProfile>(`/stocks/${s}/profile`);
 
+// ---- SEC EDGAR: insider transactions (Form 4) + filings (US only) ----
+export type InsiderTx = {
+  date: string | null; insider: string | null; position: string | null;
+  code: string | null; type: string | null;
+  shares: number | null; price: number | null; value: number | null; security: string | null;
+};
+export type InsiderReport = {
+  symbol: string; window_days: number; transactions: InsiderTx[];
+  buy_count: number; sell_count: number; distinct_buyers: number; distinct_sellers: number;
+  net_shares: number | null; cluster_buy: boolean;
+};
+export type InsiderResult = { ok: boolean; error: string | null; report: InsiderReport };
+export type FilingRow = { form: string; date: string | null; title: string | null; url: string | null; accession: string | null };
+export type FilingsResult = { ok: boolean; error: string | null; filings: FilingRow[] };
+export const getInsiders = (s: string) => get<InsiderResult>(`/stocks/${s}/insiders`);
+export const getFilings = (s: string) => get<FilingsResult>(`/stocks/${s}/filings`);
+
 export type AnalysisResult = {
   summary: string;
   recommendation: string;

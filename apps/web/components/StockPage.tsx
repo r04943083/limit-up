@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Terminal from "@/components/Terminal";
 import DeepResearch from "@/components/DeepResearch";
+import InsiderFilings from "@/components/InsiderFilings";
 import Panel from "@/components/Panel";
 import { Stat } from "@/components/ui";
 import { getProfile, getResearch, syncSymbol, type CompanyProfile, type ResearchBundle } from "@/lib/api";
@@ -114,11 +115,14 @@ export default function StockPage({ symbol }: { symbol: string | null }) {
         {tab === "财报" && <DeepResearch symbol={symbol} />}
         {needsProfile && (
           <div className="flex-1 min-w-0 overflow-auto p-5 space-y-5">
-            {profLoading && !profile && <p className="text-sm text-ink-faint py-6 text-center">加载中…</p>}
+            {profLoading && !profile && tab !== "股东" && <p className="text-sm text-ink-faint py-6 text-center">加载中…</p>}
             {tab === "分红" && profile && <Dividends p={profile} />}
             {tab === "股东" && profile && <Holders p={profile} />}
+            {/* EDGAR insider/filings are an independent US-only source — never gate them on
+                the (unrelated) profile fetch, which would hide them when profile fails. */}
+            {tab === "股东" && <InsiderFilings symbol={symbol} />}
             {tab === "概况" && profile && <Profile p={profile} />}
-            {!profLoading && !profile && <p className="text-sm text-ink-faint py-6 text-center">暂无数据。</p>}
+            {!profLoading && !profile && tab !== "股东" && <p className="text-sm text-ink-faint py-6 text-center">暂无数据。</p>}
           </div>
         )}
       </div>

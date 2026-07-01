@@ -9,6 +9,7 @@ from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
 from lucore.services.financials import DcfView, compute_dcf, get_financials_cached
 from lucore.services.intraday import IntradayPoint, get_intraday
+from lucore.services import edgar_svc
 from lucore.services import jobs as jobs_svc
 from lucore.services.livecache import cached_intraday, cached_quote
 from lucore.services.profile import get_profile_cached
@@ -162,3 +163,16 @@ def run_news_analysis(symbol: str) -> SavedNewsAnalysis:
 @router.get("/{symbol}/news-analysis", response_model=SavedNewsAnalysis | None)
 def get_news_analysis(symbol: str) -> SavedNewsAnalysis | None:
     return latest_news_analysis(symbol.upper())
+
+
+# ---- SEC EDGAR: insider transactions (Form 4) + recent filings (US only) ----
+@router.get("/{symbol}/insiders", response_model=edgar_svc.InsiderResult)
+def insiders(symbol: str) -> edgar_svc.InsiderResult:
+    """内部人交易(Form 4):买卖明细 + 集群买入(cluster-buy)信号,cache-first。非美股返回空。"""
+    return edgar_svc.get_insider_report(symbol.upper())
+
+
+@router.get("/{symbol}/filings", response_model=edgar_svc.FilingsResult)
+def filings(symbol: str) -> edgar_svc.FilingsResult:
+    """SEC 申报流水(10-K/10-Q/8-K/4/…),cache-first。非美股返回空。"""
+    return edgar_svc.get_filings(symbol.upper())
