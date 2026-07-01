@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Panel from "@/components/Panel";
 import { Stat } from "@/components/ui";
 import { getUsageSummary, type UsageSummary } from "@/lib/api";
-import { num, compact, sinceLabel } from "@/lib/format";
+import { num, compact, sinceLabel, errText } from "@/lib/format";
 
 const KIND_LABELS: Record<string, string> = {
   research: "个股分析", portfolio: "组合点评", recommendation: "AI 推荐",
@@ -16,7 +16,7 @@ export default function UsagePage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    getUsageSummary().then(setU).catch((e) => setErr(String(e)));
+    getUsageSummary().then(setU).catch((e) => setErr(errText(e)));
   }, []);
 
   const maxTok = u ? Math.max(1, ...u.by_day.map((d) => d.total_tokens)) : 1;

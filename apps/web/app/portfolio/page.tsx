@@ -10,7 +10,7 @@ import {
   getAnalytics, getReview, runReview, // removeHolding powers the 删除 action
   type PortfolioAnalytics, type PortfolioReview,
 } from "@/lib/api";
-import { num, compact, signedPct } from "@/lib/format";
+import { num, compact, signedPct, errText } from "@/lib/format";
 
 const ALLOC_COLORS = ["#21D0C3", "#E0A33E", "#9B7BE6", "#22C55E", "#EF4444", "#5B9BD5", "#E06AAA"];
 
@@ -92,7 +92,7 @@ export default function PortfolioPage() {
 
   const loadAnalytics = useCallback((id: number) => {
     setA(null);
-    getAnalytics(id).then(setA).catch((e) => setMsg(String(e)));
+    getAnalytics(id).then(setA).catch((e) => setMsg(errText(e)));
     loadHoldings(id);
   }, [loadHoldings]);
 
@@ -112,7 +112,7 @@ export default function PortfolioPage() {
       await addHolding(pid, sym.trim().toUpperCase(), Number(qty) || 0, cost ? Number(cost) : undefined);
       setSym(""); setQty(""); setCost("");
       loadAnalytics(pid);
-    } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+    } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
 
   // 编辑 = prefill the form (add() upserts by symbol, overwriting qty/cost).
@@ -130,7 +130,7 @@ export default function PortfolioPage() {
     try {
       await removeHolding(id);
       loadAnalytics(pid);
-    } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+    } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
 
   const onFile = async (file: File) => {
@@ -140,13 +140,13 @@ export default function PortfolioPage() {
       const { added } = await importPortfolioCsv(pid, await file.text());
       setMsg(`已导入 ${added} 个持仓。`);
       loadAnalytics(pid);
-    } catch (e) { setMsg(String(e)); } finally { setBusy(false); }
+    } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
 
   const doReview = () => {
     if (!pid) return;
     setReviewing(true);
-    runReview(pid).then(setReview).catch((e) => setMsg(String(e))).finally(() => setReviewing(false));
+    runReview(pid).then(setReview).catch((e) => setMsg(errText(e))).finally(() => setReviewing(false));
   };
 
   const effNames = a && a.hhi > 0 ? 1 / a.hhi : null;

@@ -8,7 +8,7 @@ import {
   getRecCategories, getRecommendations, generateRecommendations,
   type Recommendation,
 } from "@/lib/api";
-import { num } from "@/lib/format";
+import { num, errText } from "@/lib/format";
 
 const LABELS: Record<string, string> = {
   growth: "成长", value: "价值", momentum: "动量", dividend: "红利",
@@ -27,7 +27,7 @@ export default function RecommendationsPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback((c: string) => {
-    getRecommendations(c).then(setRecs).catch((e) => setErr(String(e)));
+    getRecommendations(c).then(setRecs).catch((e) => setErr(errText(e)));
   }, []);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function RecommendationsPage() {
     setErr(null);
     generateRecommendations(cat)
       .then((r) => setRecs(r))
-      .catch((e) => setErr(String(e)))
+      .catch((e) => setErr(errText(e)))
       .finally(() => setBusy(false));
   };
 

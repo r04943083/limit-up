@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Panel from "@/components/Panel";
 import { getInventory, syncAll, type Inventory } from "@/lib/api";
-import { compact, sinceLabel } from "@/lib/format";
+import { compact, sinceLabel, errText } from "@/lib/format";
 
 // Human-readable byte size.
 function bytes(b: number | null | undefined): string {
@@ -42,7 +42,7 @@ export default function DataPage() {
   const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    getInventory().then(setInv).catch((e) => setErr(String(e)));
+    getInventory().then(setInv).catch((e) => setErr(errText(e)));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -61,7 +61,7 @@ export default function DataPage() {
       );
       load();
     } catch (e) {
-      setNote(`更新失败:${String(e)}`);
+      setNote(`更新失败:${errText(e)}`);
     } finally {
       setBusy(false);
     }

@@ -428,7 +428,6 @@ export default function WatchlistPane({
                 {groups.filter((g) => g.id !== gid).length === 0 && <div className="px-3 py-1.5 text-ink-faint">无其他分组</div>}
               </div>
             </div>
-            <button disabled title="即将推出" className="w-full text-left px-3 py-1.5 text-ink-faint/60 cursor-not-allowed">设置提醒</button>
             <button onClick={() => doRemove(ctx.row)} className="w-full text-left px-3 py-1.5 text-down hover:bg-down/10">移除</button>
           </div>
         </>

@@ -54,3 +54,15 @@ export function recTone(rec: string | null | undefined): "up" | "down" | "amber"
   if (r.includes("buy") || r.includes("outperform")) return "up";
   return "amber";
 }
+
+// Humanize a thrown API error (`Error: "API 502: /path"`) into a friendly Chinese message,
+// so users never see a raw status+path string. Non-API errors pass through (sans "Error:").
+export function errText(e: unknown): string {
+  const s = String(e).replace(/^Error:\s*/, "");
+  const code = Number(s.match(/^API (\d+):/)?.[1]);
+  if (code === 404) return "暂无数据";
+  if (code === 429) return "数据源限流,请稍后重试";
+  if (code >= 500) return "服务暂时不可用,请稍后重试";
+  if (code >= 400) return "请求失败,请重试";
+  return s;
+}

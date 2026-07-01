@@ -96,6 +96,7 @@ export default function DeepResearch({ symbol }: { symbol: string }) {
 
   // DCF assumptions (percent units in the UI; converted to fractions for the API).
   const [dcf, setDcf] = useState<DcfView | null>(null);
+  const [dcfErr, setDcfErr] = useState(false);
   const [growth, setGrowth] = useState<number | null>(null); // %
   const [discount, setDiscount] = useState(9); // %
   const [terminal, setTerminal] = useState(2.5); // %
@@ -103,14 +104,14 @@ export default function DeepResearch({ symbol }: { symbol: string }) {
   const [seeded, setSeeded] = useState(false);
 
   useEffect(() => {
-    setLoading(true); setFin(null); setDcf(null); setSeeded(false);
+    setLoading(true); setFin(null); setDcf(null); setDcfErr(false); setSeeded(false);
     getFinancials(symbol).then(setFin).catch(() => setFin(null)).finally(() => setLoading(false));
   }, [symbol]);
 
   // First DCF call (no params) seeds the sliders with the server's defaults.
   useEffect(() => {
     getDcf(symbol).then((v) => {
-      setDcf(v);
+      setDcf(v); setDcfErr(false);
       if (v.result && !seeded) {
         setGrowth(Math.round(v.result.growth * 1000) / 10);
         setDiscount(Math.round(v.result.discount * 1000) / 10);
@@ -118,7 +119,7 @@ export default function DeepResearch({ symbol }: { symbol: string }) {
         setYears(v.result.years);
         setSeeded(true);
       }
-    }).catch(() => setDcf(null));
+    }).catch(() => { setDcf(null); setDcfErr(true); }); // surface failure instead of a silent dash
   }, [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recompute = useCallback(() => {
@@ -173,7 +174,9 @@ export default function DeepResearch({ symbol }: { symbol: string }) {
 
       {/* DCF */}
       <Panel title="DCF 估值" hint="两阶段折现自由现金流">
-        {dcf && dcf.has_fcf === false ? (
+        {dcfErr && !dcf ? (
+          <p className="text-sm text-ink-faint py-4">DCF 估值暂时算不出来(数据源或计算异常)。请稍后重试,或点右上角 ↻ 更新该标的。</p>
+        ) : dcf && dcf.has_fcf === false ? (
           <p className="text-sm text-ink-faint py-4">该标的缺少足够的自由现金流 / 股本数据,暂不能做 DCF 估值。</p>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
