@@ -10,6 +10,9 @@ test("AI 工作室:五个 Tab 切换渲染(不触发生成)", async ({ page }) =
   // Each tab switches and renders its own structure (do NOT click generate buttons).
   await page.getByRole("button", { name: "多空辩论" }).click();
   await expect(page.getByRole("heading", { name: "多空辩论" })).toBeVisible();
+  // Persona seating: a 多头席位 + 空头席位 selector each seat a master (default 通用).
+  await expect(page.locator("select").filter({ hasText: "多头席位:通用" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("select").filter({ hasText: "空头席位:通用" })).toBeVisible();
 
   await page.getByRole("button", { name: "多智能体" }).click();
   await expect(page.getByRole("heading", { name: "多智能体投研" })).toBeVisible();

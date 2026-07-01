@@ -749,10 +749,15 @@ export const runCouncil = (s: string) => post<SavedCouncil>(`/studio/council/${s
 export type DebateResult = {
   bull_case: string; bear_case: string; bull_rebuttal: string; bear_rebuttal: string;
   winner: string; confidence: number; verdict: string; key_question: string;
+  bull_persona: string; bear_persona: string; bull_persona_name: string; bear_persona_name: string;
 };
 export type SavedDebate = { symbol: string; provider: string; created_at: string; result: DebateResult };
 export const getDebate = (s: string) => get<SavedDebate | null>(`/studio/debate/${s}`);
-export const runDebate = (s: string) => post<SavedDebate>(`/studio/debate/${s}`);
+// Optionally seat a persona on each side for a matchup debate (empty = generic seat).
+export const runDebate = (s: string, bull = "", bear = "") => {
+  const q = [bull && `bull=${bull}`, bear && `bear=${bear}`].filter(Boolean).join("&");
+  return post<SavedDebate>(`/studio/debate/${s}${q ? `?${q}` : ""}`);
+};
 
 export type AgentView = { agent: string; stance: string; score: number; rationale: string };
 export type MultiAgentResult = {

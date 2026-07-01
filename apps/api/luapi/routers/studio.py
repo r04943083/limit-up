@@ -50,9 +50,10 @@ def get_debate(symbol: str) -> debate_svc.SavedDebate | None:
 
 
 @router.post("/debate/{symbol}", response_model=debate_svc.SavedDebate)
-def run_debate(symbol: str) -> debate_svc.SavedDebate:
+def run_debate(symbol: str, bull: str | None = None, bear: str | None = None) -> debate_svc.SavedDebate:
+    """Optionally seat a persona on each side (?bull=<key>&bear=<key>) for a matchup debate."""
     try:
-        return debate_svc.run_debate(symbol)
+        return debate_svc.run_debate(symbol, bull_persona=bull, bear_persona=bear)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"debate failed: {e}") from e
 

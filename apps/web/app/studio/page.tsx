@@ -77,31 +77,49 @@ function DebateTab() {
   const [data, setData] = useState<DebateResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [bull, setBull] = useState("");  // persona key seated on the bull side ("" = generic)
+  const [bear, setBear] = useState("");
 
   const load = useCallback((s: string) => {
     getDebate(s.trim().toUpperCase()).then((d) => setData(d?.result ?? null)).catch(() => setData(null));
   }, []);
   useEffect(() => { load("NVDA"); }, [load]);
+  useEffect(() => { getPersonas().then(setPersonas).catch(() => {}); }, []);
 
   const run = () => {
     setBusy(true); setErr(null);
-    runDebate(symbol.trim().toUpperCase()).then((d) => setData(d.result))
-      .catch((e) => setErr(String(e).replace(/^Error:\s*/, ""))).finally(() => setBusy(false));
+    runDebate(symbol.trim().toUpperCase(), bull, bear).then((d) => setData(d.result))
+      .catch((e) => setErr(errText(e))).finally(() => setBusy(false));
   };
 
   const winTone = data?.winner === "bull" ? "up" : data?.winner === "bear" ? "down" : "amber";
+  const seat = (v: string, set: (s: string) => void, side: "多头" | "空头") => (
+    <select value={v} onChange={(e) => set(e.target.value)}
+      className="rounded-lg bg-panel-2 border border-line px-2 py-2 text-sm outline-none focus:border-accent">
+      <option value="">{side}席位:通用</option>
+      {personas.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}
+    </select>
+  );
   return (
     <div className="space-y-4">
-      <Panel title="多空辩论" hint="同一组事实 · 多空对辩 · 法官裁决"><SymbolBar symbol={symbol} setSymbol={setSymbol} onRun={run} busy={busy} label="开始辩论" /></Panel>
+      <Panel title="多空辩论" hint="同一组事实 · 多空对辩 · 法官裁决">
+        <div className="flex flex-wrap gap-2">
+          {seat(bull, setBull, "多头")}
+          {seat(bear, setBear, "空头")}
+          <SymbolBar symbol={symbol} setSymbol={setSymbol} onRun={run} busy={busy} label="开始辩论" />
+        </div>
+        <p className="text-[11px] text-ink-faint mt-2">可给多空席位各选一位投资大师(如 巴菲特 🐂 vs 木头姐 🐻),或留「通用」由 AI 自由对辩。</p>
+      </Panel>
       {err && <div className="rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
       {data ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Panel title="多头 🐂" hint="Bull">
+            <Panel title="多头 🐂" hint={data.bull_persona_name || "Bull"}>
               <p className="text-sm text-ink leading-relaxed">{data.bull_case}</p>
               {data.bull_rebuttal && <p className="text-xs text-ink-dim mt-2 leading-relaxed">反驳:{data.bull_rebuttal}</p>}
             </Panel>
-            <Panel title="空头 🐻" hint="Bear">
+            <Panel title="空头 🐻" hint={data.bear_persona_name || "Bear"}>
               <p className="text-sm text-ink leading-relaxed">{data.bear_case}</p>
               {data.bear_rebuttal && <p className="text-xs text-ink-dim mt-2 leading-relaxed">反驳:{data.bear_rebuttal}</p>}
             </Panel>
