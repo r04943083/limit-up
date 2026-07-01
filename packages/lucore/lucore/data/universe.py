@@ -48,6 +48,8 @@ _CSINDEX_CODE = {"csi300": "000300", "csi500": "000905", "sse50": "000016", "sta
 _SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 _NDX_URL = "https://en.wikipedia.org/wiki/Nasdaq-100"
 _HSI_URL = "https://en.wikipedia.org/wiki/Hang_Seng_Index"
+# Stable, maintained CSV fallback for S&P 500 when the Wikipedia table scrape fails/changes.
+_SP500_CSV = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
 
 # Hang Seng TECH has no clean machine-readable source, so we keep a curated member list.
 # Membership rotates a little over time; for a screening universe an extra valid HK tech
@@ -111,24 +113,43 @@ def _fetch_cn(key: str) -> list[Constituent]:
     return out
 
 
-def _fetch_us(key: str) -> list[Constituent]:
-    import pandas as pd
-
-    if key == "sp500":
-        df = pd.read_html(io.StringIO(_grab(_SP500_URL)))[0]
-        tcol, ncol = "Symbol", "Security"
-    else:
-        tabs = pd.read_html(io.StringIO(_grab(_NDX_URL)))
-        cand = [t for t in tabs if "Ticker" in t.columns]
-        if not cand:
-            return []
-        df, tcol, ncol = cand[-1], "Ticker", "Company"
+def _rows_us(df, tcol: str, ncol: str) -> list[Constituent]:  # noqa: ANN001
+    """Extract (ticker, name) pairs from a constituents table, normalizing tickers
+    (BRK.B → BRK-B) and dropping non-ASCII / malformed rows."""
     out: list[Constituent] = []
     for r in df.to_dict("records"):
         t = str(r.get(tcol, "")).strip().upper().replace(".", "-")
         if t and t.replace("-", "").isalnum() and t.isascii():
             out.append((t, _clean(r.get(ncol))))
     return out
+
+
+def _fetch_us(key: str) -> list[Constituent]:
+    import pandas as pd
+
+    if key == "sp500":
+        # Primary: Wikipedia table. Fragile (layout/column drift), so on a thin/failed scrape
+        # fall back to a stable maintained CSV of the current S&P 500 constituents.
+        try:
+            df = pd.read_html(io.StringIO(_grab(_SP500_URL)))[0]
+            out = _rows_us(df, "Symbol", "Security")
+            if len(out) >= 100:
+                return out
+        except Exception:  # noqa: BLE001 - fall through to the CSV source
+            pass
+        try:
+            # The maintained CSV header is `Symbol,Security,GICS Sector,...` — the name
+            # column is `Security` (same as Wikipedia), not `Name`.
+            df = pd.read_csv(io.StringIO(_grab(_SP500_CSV)))
+            return _rows_us(df, "Symbol", "Security")
+        except Exception:  # noqa: BLE001
+            return []
+
+    tabs = pd.read_html(io.StringIO(_grab(_NDX_URL)))
+    cand = [t for t in tabs if "Ticker" in t.columns]
+    if not cand:
+        return []
+    return _rows_us(cand[-1], "Ticker", "Company")
 
 
 def _fetch_hk(key: str) -> list[Constituent]:

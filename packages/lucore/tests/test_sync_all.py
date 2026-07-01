@@ -8,6 +8,7 @@ import lucore.services.financials as fin
 import lucore.services.markets_svc as mk
 import lucore.services.profile as prof
 import lucore.services.sync as sync
+import lucore.services.us_market as us_svc
 
 
 def _patch_common(monkeypatch, *, fin_ok=True, prof_ok=True):
@@ -31,6 +32,8 @@ def _patch_common(monkeypatch, *, fin_ok=True, prof_ok=True):
     monkeypatch.setattr(cn, "get_limit_up_pool", lambda *a, **k: object())
     monkeypatch.setattr(cn, "get_dragon_tiger", lambda *a, **k: object())
     monkeypatch.setattr(cn, "get_hsgt_summary", lambda *a, **k: object())
+    # US discovery movers are warmed too; patch so no live yfinance in the wiring test.
+    monkeypatch.setattr(us_svc, "get_movers", lambda *a, **k: object())
 
 
 def test_deep_sync_fills_fundamentals_and_feeds(monkeypatch):
@@ -40,7 +43,8 @@ def test_deep_sync_fills_fundamentals_and_feeds(monkeypatch):
     assert r.synced == 2
     assert r.financials_synced == 2
     assert r.profiles_synced == 2
-    assert r.feeds == {"indices": True, "limit_up": True, "dragon_tiger": True, "hsgt": True}
+    assert r.feeds == {"indices": True, "limit_up": True, "dragon_tiger": True, "hsgt": True,
+                       "us_day_gainers": True, "us_day_losers": True, "us_most_actives": True}
 
 
 def test_shallow_sync_skips_fundamentals(monkeypatch):
@@ -49,7 +53,8 @@ def test_shallow_sync_skips_fundamentals(monkeypatch):
     assert r.financials_synced == 0
     assert r.profiles_synced == 0
     # global feeds still refresh even in shallow mode (they're cheap + high value)
-    assert set(r.feeds) == {"indices", "limit_up", "dragon_tiger", "hsgt"}
+    assert set(r.feeds) == {"indices", "limit_up", "dragon_tiger", "hsgt",
+                            "us_day_gainers", "us_day_losers", "us_most_actives"}
 
 
 def test_failed_fundamentals_are_tolerated(monkeypatch):

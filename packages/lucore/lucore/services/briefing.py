@@ -82,6 +82,26 @@ def compute_watchlist_health() -> list[HealthOut]:
     return out
 
 
+def _us_market_breadth() -> dict:
+    """Real US market movers (not just the user's held symbols) so the daily briefing can
+    narrate the actual market. Cache-first via us_market — this is a generation action, so a
+    cold board may fetch live, but repeat runs read the cache."""
+    from .us_market import get_movers
+
+    out: dict[str, list] = {}
+    for kind in ("day_gainers", "day_losers", "most_actives"):
+        try:
+            # Cache-only: the briefing must not block on live Yahoo fetches (sync warms these).
+            board = get_movers(kind, count=30, allow_fetch=False).board
+            out[kind] = [
+                {"symbol": s.symbol, "name": s.name, "change_pct": s.change_pct, "price": s.price}
+                for s in board.stocks[:5]
+            ]
+        except Exception:  # noqa: BLE001 - a down feed shouldn't sink the whole briefing
+            out[kind] = []
+    return out
+
+
 def _gather_facts() -> dict:
     """Assemble briefing facts purely from cached snapshots (fast)."""
     movers = []
@@ -125,6 +145,7 @@ def _gather_facts() -> dict:
         "strongest_health": strongest,
         "weakest_health": weakest,
         "top_recommendations": top_recos,
+        "us_market": _us_market_breadth(),
     }
 
 

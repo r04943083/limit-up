@@ -149,11 +149,15 @@ def _refresh_global_feeds() -> dict[str, bool]:
 
     from .cn_market import get_dragon_tiger, get_hsgt_summary, get_limit_up_pool
     from .markets_svc import get_indices
+    from .us_market import get_movers
 
     _try("indices", lambda: get_indices(force=True))
     _try("limit_up", lambda: get_limit_up_pool())
     _try("dragon_tiger", lambda: get_dragon_tiger())
     _try("hsgt", lambda: get_hsgt_summary())
+    # US discovery movers (the 发现 page): warm the core boards so it loads instantly.
+    for _kind in ("day_gainers", "day_losers", "most_actives"):
+        _try(f"us_{_kind}", lambda k=_kind: get_movers(k))
     return feeds
 
 

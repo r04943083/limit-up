@@ -10,51 +10,28 @@ succeeded from cache, or an empty result with ``ok=False`` on a cold failure.
 """
 from __future__ import annotations
 
-import datetime as dt
-
 from pydantic import BaseModel
 
 from ..data import cn_market as cn
-from ..db import session_scope
-from ..db.models import MarketDataCache
+from . import market_cache as mc
 
 _TODAY_TTL_MIN = 30
 
 
-def _aware(d: dt.datetime) -> dt.datetime:
-    return d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)
-
-
 def _today_str() -> str:
-    return dt.date.today().strftime("%Y%m%d")
+    return mc.today_str()
 
 
-def _read(key: str) -> tuple[str | None, dt.datetime | None]:
-    with session_scope() as s:
-        row = s.get(MarketDataCache, key)
-        if row is None:
-            return None, None
-        return row.payload_json, row.fetched_at
+def _read(key: str) -> tuple[str | None, "object | None"]:
+    return mc.read(key)
 
 
 def _write(key: str, payload: str) -> None:
-    with session_scope() as s:
-        row = s.get(MarketDataCache, key)
-        now = dt.datetime.now(dt.timezone.utc)
-        if row is None:
-            s.add(MarketDataCache(cache_key=key, payload_json=payload, fetched_at=now))
-        else:
-            row.payload_json = payload
-            row.fetched_at = now
+    mc.write(key, payload)
 
 
-def _fresh_enough(key: str, fetched_at: dt.datetime | None, *, is_today: bool) -> bool:
-    if fetched_at is None:
-        return False
-    if not is_today:
-        return True  # past days are immutable
-    age = dt.datetime.now(dt.timezone.utc) - _aware(fetched_at)
-    return age.total_seconds() < _TODAY_TTL_MIN * 60
+def _fresh_enough(key: str, fetched_at, *, is_today: bool) -> bool:  # noqa: ANN001
+    return mc.fresh_enough(fetched_at, is_today=is_today, today_ttl_min=_TODAY_TTL_MIN)
 
 
 class LimitUpResult(BaseModel):

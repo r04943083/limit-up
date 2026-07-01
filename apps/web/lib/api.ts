@@ -521,6 +521,29 @@ export type OverviewRow = {
 };
 export const getOverview = () => get<OverviewRow[]>("/markets/overview");
 
+// ---- US discovery (发现/异动) — market movers, the US analogue of A-share 涨停/龙虎榜 ----
+export type MoverStock = {
+  symbol: string;
+  name: string | null;
+  price: number | null;
+  change: number | null;
+  change_pct: number | null;
+  volume: number | null;
+  avg_volume: number | null;
+  market_cap: number | null;
+  pe: number | null;
+  week52_high: number | null;
+  week52_low: number | null;
+  vol_ratio: number | null;      // volume / avg_volume — 异常放量 > 1
+  from_high_pct: number | null;  // (price-52wHigh)/52wHigh*100 — 0 = 新高
+};
+export type MoversBoard = { kind: string; label: string; count: number; stocks: MoverStock[] };
+export type MoversResult = { ok: boolean; error: string | null; board: MoversBoard };
+export type UsFeed = { kind: string; label: string };
+export const getUsFeeds = () => get<UsFeed[]>("/markets/us/feeds");
+export const getUsMovers = (kind: string, count = 30) =>
+  get<MoversResult>(`/markets/us/movers/${kind}?count=${count}`);
+
 // ---- Dense watchlist quotes + groups ----
 export type QuoteRow = {
   item_id: number;
