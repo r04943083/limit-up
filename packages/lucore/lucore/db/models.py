@@ -273,6 +273,25 @@ class PaperTrade(Base, TimestampMixin):
     note: Mapped[str | None] = mapped_column(String(256))
 
 
+class AgentDecision(Base, TimestampMixin):
+    """A dated AI investment decision (council/debate) with the price at decision time, so LU
+    can later reflect: did the sized call play out? One row per symbol+kind+day (idempotent)."""
+    __tablename__ = "agent_decisions"
+    __table_args__ = (
+        UniqueConstraint("symbol", "kind", "decided_on", name="uq_decision"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(16), default="council")  # council | debate
+    decided_on: Mapped[str] = mapped_column(String(10), index=True)   # YYYY-MM-DD
+    action: Mapped[str] = mapped_column(String(8), default="hold")     # buy/add/hold/trim/sell
+    stance: Mapped[str | None] = mapped_column(String(16))             # consensus / winner
+    score: Mapped[float | None] = mapped_column(Float)                 # avg conviction / confidence
+    price: Mapped[float | None] = mapped_column(Float)                 # price at decision
+    provider: Mapped[str | None] = mapped_column(String(32))
+
+
 class ChatMessage(Base, TimestampMixin):
     """One turn in an AI-chat conversation. session_id groups a conversation (default 'default')."""
     __tablename__ = "chat_messages"

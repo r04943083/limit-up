@@ -431,6 +431,12 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
                       <span className="text-down">空 {council.bearish}</span>
                       <span className="text-ink-faint ml-auto tnum">均分 {council.avg_score.toFixed(1)}</span>
                     </div>
+                    {council.recommendation && (
+                      <div className={`text-xs rounded-md px-2 py-1 ${["buy", "add"].includes(council.recommendation.action) ? "text-up bg-up/10" : ["sell", "trim"].includes(council.recommendation.action) ? "text-down bg-down/10" : "text-warn bg-warn/10"}`}>
+                        建议仓位:{council.recommendation.label}
+                        {council.recommendation.target_weight_pct > 0 && ` · 目标 ${council.recommendation.target_weight_pct}%`}
+                      </div>
+                    )}
                     {council.verdicts.map((v) => (
                       <div key={v.key} className="text-xs flex items-start gap-2">
                         <span className="text-ink w-24 shrink-0 truncate">{v.name}</span>

@@ -16,6 +16,7 @@ from sqlalchemy import select
 from .analyze import SavedAnalysis, _facts, analyze_stock
 from .research import get_research
 from . import usage
+from ..compute.position import PositionSuggestion, suggest_position
 from ..db import session_scope
 from ..db.models import Analysis
 from ..llm.base import LLMProvider, get_provider, with_chinese
@@ -89,6 +90,86 @@ _PERSONAS: list[Persona] = [
             "Reason ONLY over the provided facts."
         ),
     ),
+    Persona(
+        key="munger", name="质量护城河 (Munger)", style="value",
+        tagline="只买伟大企业:高质量、强定价权,贵一点也值。",
+        system=(
+            "You are a Charlie Munger-style quality investor. Insist on great businesses — high and "
+            "durable ROIC, pricing power, rational capital allocation, simple to understand. Pay up "
+            "for quality; refuse mediocre businesses at any price. Invert: ask what kills the thesis. "
+            "Very long horizon. Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="graham", name="安全边际 (Graham)", style="value",
+        tagline="定量安全边际:低估值、稳健资产负债表。",
+        system=(
+            "You are a Benjamin Graham-style defensive value investor. Demand a hard quantitative "
+            "margin of safety: low P/E and P/B, positive tangible book, low leverage, consistent "
+            "earnings. Ignore narrative and momentum; buy statistical cheapness with balance-sheet "
+            "protection. Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="ackman", name="集中激进 (Ackman)", style="value",
+        tagline="高集中、高信念的优质龙头,重视自由现金流。",
+        system=(
+            "You are a Bill Ackman-style concentrated activist. Favor simple, predictable, "
+            "free-cash-flow-generative franchises with a catalyst to unlock value; concentrate in "
+            "high-conviction ideas. Penalize complexity, weak governance, or no catalyst. Medium-long "
+            "horizon. Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="burry", name="逆向做空 (Burry)", style="contrarian",
+        tagline="怀疑一切泡沫,寻找被高估的隐患与被埋没的深价值。",
+        system=(
+            "You are a Michael Burry-style skeptical contrarian. Hunt for mispricing on BOTH sides: "
+            "deeply undervalued misunderstood names, and dangerously overvalued/crowded stories with "
+            "hidden risk (stretched multiples, deteriorating fundamentals, froth). Be willing to be "
+            "bearish against consensus. Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="druckenmiller", name="宏观顺势 (Druckenmiller)", style="macro",
+        tagline="顺大势重仓,错了快跑;赢率×赔率决定仓位。",
+        system=(
+            "You are a Stanley Druckenmiller-style macro/trend investor. Bet big when liquidity, the "
+            "cycle, and price trend align; preserve capital and cut fast when they don't. Weigh "
+            "risk/reward asymmetry and momentum over static valuation. Short-to-medium horizon. "
+            "Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="damodaran", name="估值锚定 (Damodaran)", style="value",
+        tagline="用现金流故事给企业定价,警惕高增长的隐含预期。",
+        system=(
+            "You are an Aswath Damodaran-style valuation analyst. Anchor everything to intrinsic "
+            "value from cash flows, growth, reinvestment, and risk. Judge whether the price implies "
+            "reasonable or heroic assumptions (growth, margins, PEG, PE vs growth). Dispassionate; "
+            "story must reconcile with the numbers. Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="taleb", name="反脆弱 (Taleb)", style="quant",
+        tagline="重尾风险优先:避免爆仓,偏好凸性与不对称回报。",
+        system=(
+            "You are a Nassim Taleb-style antifragile/risk thinker. Prioritize survival and tail "
+            "risk over expected return: penalize high leverage, fragility, and crowded blow-up-prone "
+            "positions; favor convex, asymmetric payoffs with limited downside. Skeptical of point "
+            "forecasts. Reason ONLY over the provided facts."
+        ),
+    ),
+    Persona(
+        key="marks", name="周期风控 (Marks)", style="contrarian",
+        tagline="'现在在周期哪里':情绪高涨时谨慎,恐慌时进取。",
+        system=(
+            "You are a Howard Marks-style cycle-aware contrarian. Judge where sentiment and the cycle "
+            "sit: be cautious when optimism/valuation is stretched (near highs, hot RSI, rich "
+            "multiples), constructive when fear is overdone. Emphasize risk control and 'second-level "
+            "thinking' — what's already priced in. Reason ONLY over the provided facts."
+        ),
+    ),
 ]
 
 _BY_KEY = {p.key: p for p in _PERSONAS}
@@ -137,6 +218,7 @@ class CouncilResult(BaseModel):
     bearish: int = 0
     avg_score: float = 0.0
     consensus: str = "neutral"  # strict plurality of all three stances; ties → neutral
+    recommendation: PositionSuggestion = PositionSuggestion()  # deterministic sized action
 
 
 class SavedCouncil(BaseModel):
@@ -182,8 +264,10 @@ def _build_council(raw: dict) -> CouncilResult:
     top = max(counts.values())
     leaders = [k for k, v in counts.items() if v == top]
     consensus = leaders[0] if len(leaders) == 1 else "neutral"
+    # Portfolio-manager step: deterministically size the vote into an actionable position.
+    rec = suggest_position(bullish, neutral, bearish, avg)
     return CouncilResult(verdicts=verdicts, bullish=bullish, neutral=neutral, bearish=bearish,
-                         avg_score=avg, consensus=consensus)
+                         avg_score=avg, consensus=consensus, recommendation=rec)
 
 
 def run_council(symbol: str, *, provider: LLMProvider | None = None) -> SavedCouncil:
@@ -208,7 +292,13 @@ def run_council(symbol: str, *, provider: LLMProvider | None = None) -> SavedCou
     )
     raw = provider.generate_json(prompt, system=system)
     usage.record(provider, "council", symbol)
-    return _persist_council(symbol, _build_council(raw), provider.name)
+    result = _build_council(raw)
+    # Log the sized decision (with price-at-decision) for later reflection/grading.
+    from .reflection import log_decision
+    log_decision(symbol, kind="council", action=result.recommendation.action,
+                 stance=result.consensus, score=result.avg_score,
+                 price=bundle.quote.price, provider=provider.name)
+    return _persist_council(symbol, result, provider.name)
 
 
 def _persist_council(symbol: str, result: CouncilResult, provider: str) -> SavedCouncil:

@@ -9,6 +9,7 @@ from lucore.services import dna as dna_svc
 from lucore.services import jobs as jobs_svc
 from lucore.services import multi_agent as ma_svc
 from lucore.services import personas as personas_svc
+from lucore.services import reflection as reflection_svc
 from lucore.services.analyze import SavedAnalysis
 
 router = APIRouter(prefix="/studio", tags=["studio"])
@@ -71,6 +72,13 @@ def run_debate_async(symbol: str, bull: str | None = None, bear: str | None = No
     return jobs_svc.submit(
         "debate", lambda: debate_svc.run_debate(symbol, bull_persona=bull, bear_persona=bear)
     )
+
+
+# ---- Decision reflection memory (#16) ----
+@router.get("/reflections", response_model=reflection_svc.ReflectionSummary)
+def reflections(limit: int = 50) -> reflection_svc.ReflectionSummary:
+    """Past AI decisions graded against realized price moves (hit-rate + avg realized return)."""
+    return reflection_svc.get_reflections(limit=limit)
 
 
 # ---- Multi-agent (#14) ----

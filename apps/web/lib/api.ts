@@ -841,13 +841,30 @@ export const analyzeAsPersona = (key: string, symbol: string) =>
 export type CouncilVerdict = {
   key: string; name: string; style: string; stance: string; score: number; rationale: string;
 };
+export type PositionSuggestion = {
+  action: string; label: string; target_weight_pct: number;
+  conviction: number; directional: number; note: string;
+};
 export type CouncilResult = {
   verdicts: CouncilVerdict[];
   bullish: number; neutral: number; bearish: number; avg_score: number; consensus: string;
+  recommendation: PositionSuggestion;
 };
 export type SavedCouncil = { symbol: string; provider: string; created_at: string; result: CouncilResult };
 export const getCouncil = (s: string) => get<SavedCouncil | null>(`/studio/council/${s}`);
 export const runCouncil = (s: string) => runJob<SavedCouncil>(`/studio/council/${s}/async`);
+
+// ---- Decision reflection memory (past AI calls graded vs realized moves) ----
+export type ReflectionRow = {
+  symbol: string; kind: string; decided_on: string; action: string;
+  stance: string | null; score: number | null; price: number | null;
+  current_price: number | null; return_pct: number | null; grade: "hit" | "miss" | "open" | "na";
+};
+export type ReflectionSummary = {
+  rows: ReflectionRow[]; graded: number; hits: number;
+  hit_rate_pct: number | null; avg_return_pct: number | null;
+};
+export const getReflections = (limit = 50) => get<ReflectionSummary>(`/studio/reflections?limit=${limit}`);
 
 export type DebateResult = {
   bull_case: string; bear_case: string; bull_rebuttal: string; bear_rebuttal: string;

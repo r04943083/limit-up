@@ -18,8 +18,9 @@ test("AI 工作室:五个 Tab 切换渲染(不触发生成)", async ({ page }) =
   await expect(page.getByRole("heading", { name: "多智能体投研" })).toBeVisible();
 
   await page.getByRole("button", { name: "投资人格" }).click();
-  // Persona cards load from the API.
+  // Persona cards load from the API — the roster was expanded to 14 masters.
   await expect(page.getByRole("heading", { name: /Buffett/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: /Munger/ })).toBeVisible();  // new master
   // 人格会诊 entry point is present (do NOT click — it bills an LLM run).
   await expect(page.getByRole("button", { name: /全员会诊/ })).toBeVisible();
 
@@ -28,6 +29,8 @@ test("AI 工作室:五个 Tab 切换渲染(不触发生成)", async ({ page }) =
 
   await page.getByRole("button", { name: "投资 DNA" }).click();
   await expect(page.getByRole("heading", { name: "投资 DNA" })).toBeVisible();
+  // The decision-reflection memory panel renders in the DNA tab (empty state OK).
+  await expect(page.getByRole("heading", { name: "决策复盘记忆" })).toBeVisible();
 
   await page.waitForTimeout(800);
   expectClean(w);

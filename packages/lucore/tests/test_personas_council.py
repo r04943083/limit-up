@@ -82,8 +82,13 @@ class _FakeProvider:
         return self._out
 
 
+class _Quote:
+    price = 100.0
+
+
 class _Bundle:
     symbol = "NVDA"
+    quote = _Quote()
 
 
 def test_run_council_persists_tally_and_is_idempotent(db, monkeypatch):
@@ -100,6 +105,14 @@ def test_run_council_persists_tally_and_is_idempotent(db, monkeypatch):
     saved = personas.run_council("nvda", provider=prov)
     assert saved.symbol == "NVDA"
     assert saved.result.consensus == "bullish" and saved.result.bullish == 2
+    # Sized recommendation is attached (mild bull, avg 7.0 → 小仓参与).
+    assert saved.result.recommendation.action == "add"
+    assert saved.result.recommendation.target_weight_pct > 0
+
+    # The decision was logged for later reflection (with price-at-decision).
+    from lucore.services.reflection import get_reflections
+    refl = get_reflections()
+    assert any(r.symbol == "NVDA" and r.action == "add" and r.price == 100.0 for r in refl.rows)
 
     # Reads back from cache; a second same-day run stays a single row (idempotent per day).
     assert personas.latest_council("NVDA") is not None

@@ -6,10 +6,10 @@ import Panel from "@/components/Panel";
 import SymbolInput from "@/components/SymbolInput";
 import { Chip, RecBadge, ScoreMeter, Stat } from "@/components/ui";
 import {
-  analyzeAsPersona, getCoach, getCouncil, getDebate, getDna, getPanel, getPersonas,
+  analyzeAsPersona, getCoach, getCouncil, getDebate, getDna, getPanel, getPersonas, getReflections,
   runCoach, runCouncil, runDebate, runDna, runPanel,
   type CoachResult, type CouncilResult, type DebateResult, type DnaResult, type MultiAgentResult,
-  type Persona, type SavedAnalysis,
+  type Persona, type PositionSuggestion, type ReflectionSummary, type SavedAnalysis,
 } from "@/lib/api";
 import { errText, recTone } from "@/lib/format";
 
@@ -181,6 +181,24 @@ function PanelTab() {
   );
 }
 
+// Deterministic sized recommendation (portfolio-manager step). buy/add → red/up,
+// sell/trim → green/down, hold → amber.
+function RecoBanner({ rec }: { rec: PositionSuggestion | undefined }) {
+  if (!rec) return null;
+  const tone = ["buy", "add"].includes(rec.action) ? "up"
+    : ["sell", "trim"].includes(rec.action) ? "down" : "warn";
+  const cls = tone === "up" ? "text-up bg-up/10 border-up/30"
+    : tone === "down" ? "text-down bg-down/10 border-down/30"
+    : "text-warn bg-warn/10 border-warn/30";
+  return (
+    <div className={`mb-3 rounded-lg border px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1 ${cls}`}>
+      <span className="font-medium">建议仓位:{rec.label}</span>
+      {rec.target_weight_pct > 0 && <span className="text-sm">目标 {rec.target_weight_pct}%</span>}
+      <span className="ml-auto text-[11px] text-ink-faint">{rec.note}</span>
+    </div>
+  );
+}
+
 function CouncilBoard({ result }: { result: CouncilResult }) {
   const total = result.verdicts.length || 1;
   return (
@@ -196,6 +214,7 @@ function CouncilBoard({ result }: { result: CouncilResult }) {
           <div className="h-full bg-down" style={{ width: `${(result.bearish / total) * 100}%` }} />
         </div>
       </div>
+      <RecoBanner rec={result.recommendation} />
       <table className="w-full text-sm">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-ink-faint border-b border-line">
@@ -328,6 +347,59 @@ function CoachTab() {
   );
 }
 
+// Decision reflection: past AI (council) calls graded against realized price moves.
+const GRADE_CLS: Record<string, string> = {
+  hit: "text-up", miss: "text-down", open: "text-ink-dim", na: "text-ink-faint",
+};
+const GRADE_LABEL: Record<string, string> = { hit: "命中", miss: "落空", open: "观望", na: "待定" };
+
+function ReflectionsPanel() {
+  const [data, setData] = useState<ReflectionSummary | null>(null);
+  useEffect(() => { getReflections().then(setData).catch(() => setData(null)); }, []);
+  if (!data) return null;
+  return (
+    <Panel
+      title="决策复盘记忆"
+      hint={data.hit_rate_pct != null ? `命中率 ${data.hit_rate_pct}% · 均实现 ${data.avg_return_pct ?? 0}%` : "AI 历史决策 vs 实际走势"}
+    >
+      {data.rows.length === 0 ? (
+        <p className="text-sm text-ink-faint py-2">还没有可复盘的决策。跑一次「大师会诊」即会记录。</p>
+      ) : (
+        <div className="overflow-auto max-h-80">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-ink-faint border-b border-line">
+                <th className="text-left font-medium py-2">日期</th>
+                <th className="text-left font-medium">标的</th>
+                <th className="text-left font-medium">决策</th>
+                <th className="text-right font-medium">决策价</th>
+                <th className="text-right font-medium">现价</th>
+                <th className="text-right font-medium">实现</th>
+                <th className="text-right font-medium pr-1">结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((r, i) => (
+                <tr key={i} className="border-b border-line/50">
+                  <td className="py-1.5 text-ink-dim tabular-nums">{r.decided_on}</td>
+                  <td className="py-1.5 font-medium text-accent">{r.symbol}</td>
+                  <td className="py-1.5 text-ink-dim">{r.action}</td>
+                  <td className="py-1.5 text-right tabular-nums text-ink-dim">{r.price != null ? r.price.toFixed(2) : "—"}</td>
+                  <td className="py-1.5 text-right tabular-nums text-ink-dim">{r.current_price != null ? r.current_price.toFixed(2) : "—"}</td>
+                  <td className={`py-1.5 text-right tabular-nums ${r.return_pct == null ? "text-ink-faint" : r.return_pct >= 0 ? "text-up" : "text-down"}`}>
+                    {r.return_pct != null ? `${r.return_pct >= 0 ? "+" : ""}${r.return_pct}%` : "—"}
+                  </td>
+                  <td className={`py-1.5 text-right pr-1 ${GRADE_CLS[r.grade]}`}>{GRADE_LABEL[r.grade]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function DnaTab() {
   const [data, setData] = useState<DnaResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -345,6 +417,7 @@ function DnaTab() {
           {busy ? "解析中…(约 30–90 秒)" : "解析我的投资 DNA"}
         </button>
       </Panel>
+      <ReflectionsPanel />
       {err && <div className="rounded-lg border border-down/40 bg-down/10 text-down text-sm px-4 py-2">{err}</div>}
       {data ? (
         <Panel title={data.archetype || "投资画像"} hint={`风险偏好 ${data.risk_tolerance} · ${data.time_horizon}`}>
