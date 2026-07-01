@@ -442,6 +442,36 @@ export const getAnalytics = (pid: number) => get<PortfolioAnalytics>(`/portfolio
 export const getReview = (pid: number) => get<PortfolioReview | null>(`/portfolio/${pid}/review`);
 export const runReview = (pid: number) => post<PortfolioReview>(`/portfolio/${pid}/review`);
 
+// ---- Performance tear-sheet (deterministic risk/return over the basket's ~1y curve) ----
+export type MonthReturn = { month: string; return_pct: number };
+export type Tearsheet = {
+  n_days: number;
+  total_return_pct: number | null; cagr_pct: number | null;
+  sharpe: number | null; sortino: number | null; calmar: number | null;
+  volatility_pct: number | null; max_drawdown_pct: number | null;
+  var95_pct: number | null; cvar95_pct: number | null;
+  win_rate_pct: number | null; avg_win_pct: number | null; avg_loss_pct: number | null; profit_factor: number | null;
+  best_day_pct: number | null; worst_day_pct: number | null;
+  best_month_pct: number | null; worst_month_pct: number | null;
+  monthly_returns: MonthReturn[];
+  benchmark_return_pct: number | null; alpha_pct: number | null; beta: number | null;
+};
+export type PortfolioTearsheet = {
+  ok: boolean; error: string | null; base_currency: string; benchmark: string;
+  start: string | null; end: string | null; tearsheet: Tearsheet;
+};
+export const getTearsheet = (pid: number) => get<PortfolioTearsheet>(`/portfolio/${pid}/tearsheet`);
+
+// ---- Deterministic price patterns (candlestick + chart formations) ----
+export type PatternHit = { date: string; name: string; kind: "bullish" | "bearish" | "neutral"; category: "candle" | "chart"; detail: string | null };
+export const getPatterns = (s: string, period = "1y", interval = "1d") =>
+  get<PatternHit[]>(`/stocks/${s}/patterns?period=${period}&interval=${interval}`);
+
+// ---- 财经日历 (upcoming earnings / ex-dividend across tracked symbols) ----
+export type CalendarEvent = { date: string; symbol: string; type: "earnings" | "ex_dividend"; label: string; detail: string | null };
+export type CalendarResult = { within_days: number; events: CalendarEvent[] };
+export const getCalendar = (withinDays = 30) => get<CalendarResult>(`/markets/calendar?within_days=${withinDays}`);
+
 // ---- Recommendations ----
 export type Recommendation = {
   symbol: string;

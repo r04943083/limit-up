@@ -7,9 +7,9 @@ import ValuationPanel from "@/components/ValuationPanel";
 import { Stat, RecBadge, ScoreMeter } from "@/components/ui";
 import {
   getResearch, getTechnical, getOhlcv, getIntraday, getAnalysis, runAnalyze,
-  getNewsAnalysis, runNewsAnalysis, getCouncil, runCouncil,
+  getNewsAnalysis, runNewsAnalysis, getCouncil, runCouncil, getPatterns,
   type ResearchBundle, type Technical, type OhlcvBar, type IntradayPoint, type SavedAnalysis,
-  type SavedNewsAnalysis, type CouncilResult,
+  type SavedNewsAnalysis, type CouncilResult, type PatternHit,
 } from "@/lib/api";
 import { num, compact, pct, signedPct, recTone, sinceLabel, dirClass, errText } from "@/lib/format";
 import { isUS } from "@/lib/market";
@@ -43,6 +43,7 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
   const [ohlcv, setOhlcv] = useState<OhlcvBar[] | null>(null);
   const [intra, setIntra] = useState<IntradayPoint[] | null>(null);
   const [extHours, setExtHours] = useState(true);  // US: include pre/after-market points
+  const [patterns, setPatterns] = useState<PatternHit[]>([]);
   const [daily, setDaily] = useState<OhlcvBar[] | null>(null);
   const [analysis, setAnalysis] = useState<SavedAnalysis | null>(null);
   const [council, setCouncil] = useState<CouncilResult | null>(null);
@@ -108,6 +109,8 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
     getNewsAnalysis(sym).then(setNewsAna).catch(() => {});
     setCouncil(null); setCouncilErr(null);
     getCouncil(sym).then((d) => setCouncil(d?.result ?? null)).catch(() => setCouncil(null));
+    setPatterns([]);
+    getPatterns(sym).then(setPatterns).catch(() => setPatterns([]));
     // reloadKey is bumped by StockPage's ↻ 更新 so the chart + bundle refresh together
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sym, loadBundle, reloadKey]);
@@ -202,6 +205,22 @@ export default function Terminal({ symbol, reloadKey = 0 }: { symbol: string | n
               {rb.technical_signals.map((s) => (
                 <span key={s} className="px-2 py-0.5 rounded-md bg-panel-2 border border-line text-[11px] text-ink-dim">{s}</span>
               ))}
+            </div>
+          )}
+          {patterns.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <span className="text-[11px] text-ink-faint">形态</span>
+              {patterns.slice(0, 8).map((p, i) => {
+                const tone = p.kind === "bullish" ? "text-up border-up/40 bg-up/10"
+                  : p.kind === "bearish" ? "text-down border-down/40 bg-down/10"
+                  : "text-warn border-warn/40 bg-warn/10";
+                return (
+                  <span key={`${p.date}-${p.name}-${i}`} title={`${p.date}${p.detail ? " · " + p.detail : ""}`}
+                    className={`px-2 py-0.5 rounded-md border text-[11px] ${tone}`}>
+                    {p.name}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

@@ -117,6 +117,7 @@ def _refresh_fundamentals(symbol: str) -> tuple[bool, bool]:
     stocks show empty there. The deep 一键更新 pre-warms them for the user's own stocks so
     those pages are instant. Cache-first: `get_*_cached` skips symbols that are still fresh,
     so re-runs are cheap. Returns (financials_ok, profile_ok)."""
+    from .calendar_svc import get_company_events
     from .financials import get_financials_cached
     from .profile import get_profile_cached
 
@@ -130,6 +131,10 @@ def _refresh_fundamentals(symbol: str) -> tuple[bool, bool]:
         get_profile_cached(symbol)
         prof_ok = True
     except Exception:  # noqa: BLE001
+        pass
+    try:
+        get_company_events(symbol)  # warm the 财经日历 cache so that page is instant
+    except Exception:  # noqa: BLE001 - events are best-effort
         pass
     return fin_ok, prof_ok
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from lucore.services import calendar_svc
 from lucore.services import us_market as us_svc
 from lucore.services.markets_svc import IndexQuote, OverviewRow, get_indices, get_overview
 
@@ -30,3 +31,10 @@ def us_feeds() -> list[us_svc.Feed]:
 def us_movers(kind: str, count: int = 30) -> us_svc.MoversResult:
     """One US movers board (day_gainers / day_losers / most_actives / …), cache-first."""
     return us_svc.get_movers(kind, count=count)
+
+
+# ---- 财经日历: upcoming earnings / ex-dividend across tracked symbols ----
+@router.get("/calendar", response_model=calendar_svc.CalendarResult)
+def calendar(within_days: int = 30) -> calendar_svc.CalendarResult:
+    """Upcoming财报/除息 events for the symbols you follow (watchlist + holdings), cache-first."""
+    return calendar_svc.get_calendar(within_days=within_days)

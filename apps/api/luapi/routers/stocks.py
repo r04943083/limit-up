@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from lucore.compute.indicators import TechnicalAnalysis
+from lucore.compute.patterns import PatternHit, detect_patterns
 from lucore.data.base import Bar, CompanyProfile, Financials, Quote
 from lucore.data.router import get_router
 from lucore.services.analyze import SavedAnalysis, analyze_stock, latest_analysis
@@ -83,6 +84,16 @@ def technical(symbol: str, period: str = "1y", interval: str = "1d") -> Technica
     if not ta.dates:
         raise HTTPException(status_code=404, detail="no price data")
     return ta
+
+
+@router.get("/{symbol}/patterns", response_model=list[PatternHit])
+def patterns(symbol: str, period: str = "1y", interval: str = "1d") -> list[PatternHit]:
+    """确定性 K 线/图形形态识别(十字星/锤子/吞没/星线/红三兵/双顶双底…),读缓存不联网。"""
+    try:
+        bars = get_router().get_ohlcv(symbol.upper(), period=period, interval=interval, refresh=False)
+    except Exception:  # noqa: BLE001 - no bars → no patterns, not an error
+        bars = []
+    return detect_patterns(bars)
 
 
 @router.get("/{symbol}/financials", response_model=Financials)

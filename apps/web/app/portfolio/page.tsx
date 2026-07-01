@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import Panel from "@/components/Panel";
+import PortfolioTearsheet from "@/components/PortfolioTearsheet";
 import SymbolInput from "@/components/SymbolInput";
 import { Stat, RecBadge, Chip } from "@/components/ui";
 import {
@@ -201,6 +202,8 @@ export default function PortfolioPage() {
               <Stat label="有效持仓数" value={effNames ? effNames.toFixed(1) : "—"} />
             </Panel>
           </div>
+
+          {pid != null && <PortfolioTearsheet pid={pid} />}
 
           <Panel title="持仓明细" hint={`${a.positions.length}`}>
             <table className="w-full text-sm">

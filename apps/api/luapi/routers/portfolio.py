@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from lucore.compute.portfolio import PortfolioAnalytics
 from lucore.services import portfolio as pf
+from lucore.services.portfolio_perf import PortfolioTearsheet, compute_portfolio_tearsheet
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -44,6 +45,16 @@ def analytics(portfolio_id: int) -> PortfolioAnalytics:
         return pf.get_analytics(portfolio_id)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"analytics error: {e}") from e
+
+
+@router.get("/{portfolio_id}/tearsheet", response_model=PortfolioTearsheet)
+def tearsheet(portfolio_id: int) -> PortfolioTearsheet:
+    """Rigorous risk/return tear-sheet (Sharpe/Sortino/Calmar, drawdown, VaR/CVaR, monthly
+    returns, vs-SPY alpha/beta) over the current basket's ~1y reconstructed equity curve."""
+    try:
+        return compute_portfolio_tearsheet(portfolio_id)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"tearsheet error: {e}") from e
 
 
 @router.post("/{portfolio_id}/review")

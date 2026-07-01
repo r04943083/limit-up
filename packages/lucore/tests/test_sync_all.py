@@ -3,6 +3,7 @@
 All network-bound calls are monkeypatched, so this verifies *wiring* (what gets called
 and how counts are tallied), not live fetching.
 """
+import lucore.services.calendar_svc as cal
 import lucore.services.cn_market as cn
 import lucore.services.financials as fin
 import lucore.services.markets_svc as mk
@@ -28,6 +29,7 @@ def _patch_common(monkeypatch, *, fin_ok=True, prof_ok=True):
 
     monkeypatch.setattr(fin, "get_financials_cached", _fin)
     monkeypatch.setattr(prof, "get_profile_cached", _prof)
+    monkeypatch.setattr(cal, "get_company_events", lambda s, **k: object())  # warm step, no network
     monkeypatch.setattr(mk, "get_indices", lambda force=False: [])
     monkeypatch.setattr(cn, "get_limit_up_pool", lambda *a, **k: object())
     monkeypatch.setattr(cn, "get_dragon_tiger", lambda *a, **k: object())
