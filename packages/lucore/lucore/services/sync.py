@@ -89,8 +89,9 @@ def sync_symbol(symbol: str, warm: bool = False) -> bool:
 
 # yfinance is network-I/O bound, so fetching symbols concurrently is a big win
 # (a few hundred symbols sequentially can take many minutes). Kept modest to be
-# polite to the data source and to limit SQLite write contention.
-_SYNC_WORKERS = 12
+# polite to the data source and to limit SQLite write contention (single writer) —
+# too many writers just queue on the write lock, so 8 balances throughput vs contention.
+_SYNC_WORKERS = 8
 
 
 def sync_symbols(symbols: list[str], workers: int = _SYNC_WORKERS, warm: bool = False) -> SyncResult:

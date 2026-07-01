@@ -19,8 +19,11 @@ def _enable_sqlite_pragmas(dbapi_conn, _record) -> None:
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA foreign_keys=ON")
     cur.execute("PRAGMA journal_mode=WAL")
-    # Concurrent sync writes from a thread pool can briefly collide; wait instead of erroring.
-    cur.execute("PRAGMA busy_timeout=10000")
+    # Concurrent writers (bulk sync thread pool + AI job threads + multiple viewers) contend on
+    # SQLite's single writer; wait generously instead of erroring with "database is locked".
+    cur.execute("PRAGMA busy_timeout=30000")
+    cur.execute("PRAGMA synchronous=NORMAL")   # WAL-safe, far fewer fsyncs → higher write throughput
+    cur.execute("PRAGMA wal_autocheckpoint=1000")  # keep the WAL from growing unbounded under load
     cur.close()
 
 

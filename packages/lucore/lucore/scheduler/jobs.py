@@ -17,11 +17,36 @@ log = logging.getLogger("lu.scheduler")
 _scheduler: BackgroundScheduler | None = None
 
 
+def _claim_daily_run(day: str) -> bool:
+    """Atomically claim today's daily run so that, if the API runs with multiple uvicorn
+    workers, only ONE executes the job (others would otherwise each fire it N times). The
+    unique-PK insert is the arbiter: the losing worker's commit raises IntegrityError."""
+    from sqlalchemy.exc import IntegrityError
+
+    from ..db import session_scope
+    from ..db.models import MarketDataCache
+
+    key = f"jobclaim:daily:{day}"
+    try:
+        with session_scope() as s:
+            if s.get(MarketDataCache, key) is not None:
+                return False
+            s.add(MarketDataCache(cache_key=key, payload_json="1"))
+        return True
+    except IntegrityError:
+        return False  # another worker claimed it first
+
+
 def _daily_job() -> None:
     """Sync data then generate the briefing. Imported lazily to avoid heavy import at startup."""
     from ..services.briefing import generate_briefing
+    from ..services.market_cache import today_str
     from ..services.markets_svc import get_indices
     from ..services.sync import sync_all
+
+    if not _claim_daily_run(today_str()):
+        log.info("daily job already claimed by another worker — skipping")
+        return
 
     try:
         res = sync_all()

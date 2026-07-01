@@ -14,6 +14,8 @@ from lucore.config import get_settings
 from lucore.db import init_db
 from lucore.scheduler.jobs import shutdown_scheduler, start_scheduler
 
+from .guard import guard_middleware
+
 from .routers import (
     arena,
     briefing,
@@ -46,6 +48,12 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="limit-up (LU) API", version=__version__, lifespan=lifespan)
+
+# Optional shared-secret auth + concurrency backpressure (see guard.py).
+# ORDER IS LOAD-BEARING: guard is registered BEFORE CORS so CORS ends up the OUTERMOST layer
+# (Starlette wraps later-registered middleware outermost). That lets CORSMiddleware answer
+# preflight OPTIONS directly, without guard 401'ing them. Do not reorder these two.
+app.middleware("http")(guard_middleware)
 
 # Local web app dev origins (Next.js).
 app.add_middleware(

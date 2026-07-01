@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     briefing_hour: int = Field(default=8)     # local hour to auto-sync + write the daily briefing
     briefing_minute: int = Field(default=30)
 
+    # --- Access control / concurrency hardening (for exposed / concurrent use) ---
+    # When set, the API requires this shared secret (Authorization: Bearer <t> or X-Auth-Token).
+    # Unset (default) = open, preserving the current local single-user experience.
+    auth_token: str | None = Field(default=None)
+    # Backpressure: max in-flight requests before the API sheds load with 429 (protects the
+    # single worker + shared LLM quota from a concurrent stampede). 0 = unlimited.
+    max_concurrent_requests: int = Field(default=48, ge=0)
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / self.db_filename
